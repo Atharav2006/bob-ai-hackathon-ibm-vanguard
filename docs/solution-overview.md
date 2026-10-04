@@ -1,41 +1,22 @@
 # Solution Overview
 
-## What We Built
+## Core Mechanism
 
-[Describe your solution in plain language. Avoid jargon — write as if explaining to a smart colleague unfamiliar with your tech stack.]
+The Autonomous Disaster Response Planner is a web application designed for the first 72 hours of an emergency. It operates on two main AI-driven mechanisms:
+1. **Intelligence Structuring:** Unstructured field reports are ingested via FastAPI and processed by **watsonx.ai Granite 3.0** to extract structured `Needs` (category, quantity, urgency).
+2. **Resource Optimization:** An **OR-Tools CP-SAT** planner engine computes constrained allocations (task bundles) matching available teams/vehicles to the most urgent needs, strictly respecting real-time graph connectivity (e.g., bridge closures).
 
-## How It Works
+## What Makes It Different
 
-[Explain the core mechanism step by step. A numbered list or simple flow works well here.]
-
-1. [Step 1: e.g., "User connects their GitHub repository via OAuth"]
-2. [Step 2: e.g., "The system ingests pipeline logs and feeds them to watsonx.ai"]
-3. [Step 3: e.g., "An anomaly score is computed and displayed on the dashboard"]
-4. [Step 4: e.g., "Alerts are sent to Slack when the score exceeds a threshold"]
-
-## Architecture Diagram
-
-> See [`architecture.md`](architecture.md) for the detailed diagram.
-
-[Optionally include a simple ASCII or Mermaid diagram here for quick reference.]
-
-```
-[User] → [Frontend: React] → [API: FastAPI] → [watsonx.ai] → [Dashboard]
-                                    ↓
-                             [PostgreSQL DB]
-```
+Unlike naive "first-come-first-served" dispatch systems, our solution employs constraint programming to mathematically prove that no resource is double-booked and that routes are actually feasible based on the latest access updates. It features **IBM Bob** integrated via MCP to allow coordinators to interrogate the mathematical constraints conversationally before atomic transaction approval.
 
 ## Key Design Decisions
 
-| Decision | Rationale |
-|---|---|
-| [e.g., Used watsonx.ai for anomaly detection] | [e.g., Pre-trained models reduced time-to-value vs. building from scratch] |
-| [Decision 2] | [Rationale 2] |
-| [Decision 3] | [Rationale 3] |
+- **Deterministic Fallback vs. Optimization:** We maintain a baseline allocator alongside the CP-SAT engine to ensure the system can always produce a viable plan within a 5-second computation limit, even if complex constraints fail.
+- **Strict Data Provenance:** Every report retains its raw text and structured derivation. Plans are immutable snapshots; approvals are atomic transactional locks in PostgreSQL to prevent double-booking.
+- **Load-bearing AI:** We did not just add a chatbot. IBM Bob is given MCP access to the PostgreSQL incident state, acting as a true copilot for the coordinator's operational decisions.
 
-## IBM Technologies Used
+## User Experience
 
-[Explain specifically HOW you used each IBM technology — not just that you used it.]
-
-- **[IBM Tech 1, e.g., watsonx.ai]:** [How it was used — e.g., "Used the `ibm/granite-13b-instruct-v2` model via the Python SDK to classify anomaly types from log text."]
-- **[IBM Tech 2]:** [How it was used]
+- **Coordinators** see a Situation Overview map (Leaflet) highlighting zones by urgency. They can prompt IBM Bob to explain the latest CP-SAT plan and approve it.
+- **Field Responders** use a mobile-optimized form to submit brief reports which are instantly converted to structured demand.

@@ -1,79 +1,59 @@
 # Setup Guide
 
-> **This file is read by the automated evaluation pipeline. Be precise and complete.**
+This guide walks you through setting up and running the Autonomous Disaster Response Planner locally.
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
-
-- [ ] [e.g., Python 3.11+]
-- [ ] [e.g., Node.js 18+]
-- [ ] [e.g., Docker Desktop]
-- [ ] [e.g., An IBM Cloud account with watsonx.ai access]
+- **Docker & Docker Compose** (version 2+)
+- **Git**
+- An **IBM watsonx.ai** account (API Key and Project ID)
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in the values:
+Copy `src/.env.example` to `src/.env` and update it with your real credentials:
 
 ```bash
-cp .env.example .env
+# PostgreSQL Database Configuration
+DATABASE_URL=postgresql://disaster_user:disaster_password@db:5432/disaster_db
+
+# watsonx.ai Integration
+WATSONX_API_KEY=your_watsonx_api_key_here
+WATSONX_PROJECT_ID=your_watsonx_project_id_here
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+
+# IBM Bob Integration
+IBM_BOB_API_KEY=your_ibm_bob_api_key_here
+
+# Frontend Configuration
+VITE_API_BASE_URL=http://localhost:8000
 ```
 
-| Variable | Description | Required |
-|---|---|---|
-| `WATSONX_API_KEY` | Your IBM watsonx.ai API key | Yes |
-| `WATSONX_PROJECT_ID` | Your watsonx.ai project ID | Yes |
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `SLACK_WEBHOOK_URL` | Slack webhook for alerts | No |
+## Installation & Running
 
-## Installation
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/drijesh-ppatel/bob-ai-hackathon-submission-template.git
+   cd Disaster_Response_Project
+   ```
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/[your-org]/[your-repo].git
-cd [your-repo]
+2. **Navigate to the source directory:**
+   ```bash
+   cd src
+   ```
 
-# 2. Install backend dependencies
-[your command — e.g.: pip install -r requirements.txt]
+3. **Build and start the services using Docker Compose:**
+   ```bash
+   docker-compose up --build -d
+   ```
 
-# 3. Install frontend dependencies (if applicable)
-[your command — e.g.: cd frontend && npm install]
-
-# 4. Set up the database (if applicable)
-[your command — e.g.: python manage.py migrate]
-```
-
-## Running the Application
-
-```bash
-# Start the backend
-[your command — e.g.: uvicorn app.main:app --reload]
-
-# Start the frontend (in a separate terminal, if applicable)
-[your command — e.g.: cd frontend && npm run dev]
-```
-
-The application will be available at: `http://localhost:[PORT]`
-
-## Running Tests
-
-```bash
-[your test command — e.g.: pytest tests/ -v]
-```
-
-## Quick Demo (Optional)
-
-If you have a demo script or sample data to showcase the project quickly:
-
-```bash
-[e.g.: python demo/seed_demo_data.py]
-[e.g.: open http://localhost:8000/demo]
-```
+4. **Verify it's working:**
+   - **Frontend:** Open your browser and navigate to `http://localhost:5173`. You should see the React dashboard indicating the backend is running.
+   - **Backend API Docs:** Navigate to `http://localhost:8000/docs` to see the FastAPI Swagger UI.
 
 ## Troubleshooting
 
-| Issue | Solution |
+| Error | Solution |
 |---|---|
-| [e.g., `ModuleNotFoundError`] | [e.g., Run `pip install -r requirements.txt` again] |
-| [e.g., Database connection refused] | [e.g., Ensure PostgreSQL is running: `docker compose up db`] |
-| [e.g., watsonx.ai 401 error] | [e.g., Check `WATSONX_API_KEY` in your `.env` file] |
+| `failed to connect to the docker API` | Ensure Docker Desktop is running before executing `docker-compose`. |
+| `Watsonx extraction failed` | Verify your `WATSONX_API_KEY` and `WATSONX_PROJECT_ID` in `src/.env`. Ensure the IBM cloud region in `WATSONX_URL` matches your project. |
+| Port conflicts (`5432` or `8000` or `5173`) | Stop other local PostgreSQL instances or processes using these ports, or change the mapped ports in `docker-compose.yml`. |

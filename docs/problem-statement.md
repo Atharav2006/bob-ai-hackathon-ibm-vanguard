@@ -2,20 +2,22 @@
 
 ## Background
 
-[Describe the broader context. What domain or industry does this problem belong to? What situation creates the problem?]
+Disaster response organizations face immense pressure during the critical first 72 hours of an incident (such as a flood or earthquake). Coordinators must manage dynamic situations where information changes by the minute, routes close, and resources are highly constrained. 
 
 ## The Problem
 
-[State the problem clearly and specifically. Avoid vague statements like "things are slow" — instead say "Operations teams spend an average of 45 minutes per incident diagnosing pipeline failures because logs are scattered across 6 different tools."]
+Disaster coordinators struggle to distribute scarce teams, medical support, vehicles, and supplies efficiently. Reports come in unstructured formats (text messages, voice), which takes precious time to parse. Consequently, coordinators often overcommit resources, miss critical shortages, or dispatch teams to inaccessible zones, causing delayed response times.
 
 ## Who is Affected
 
-[Describe the specific user or persona experiencing this problem. Be concrete — not "developers" but "backend engineers managing CI/CD pipelines in enterprises with 50+ microservices."]
+- **Disaster Coordinators:** Who need a shared operational picture to issue achievable plans.
+- **Field Responders:** Who submit observations under poor network conditions and need actionable, safe mission assignments.
+- **Logistics Officers:** Who struggle to maintain real-time inventory when resources are double-booked.
 
 ## Why It Matters
 
-[What is the cost of this problem? Lost time? Revenue? Safety risk? Frustration? Quantify if possible.]
+The cost of inefficient allocation during a disaster is measured in prolonged suffering, misallocated medical supplies, and wasted rescue efforts. Every minute saved in correctly structuring a need and dispatching an available team directly impacts the effectiveness of the humanitarian response.
 
 ## Why Existing Solutions Fall Short
 
-[Briefly explain what people currently do and why it doesn't fully solve the problem. This sets up why your solution is needed.]
+Current systems rely on scattered spreadsheets or static GIS maps. They lack an optimization engine that respects strict real-time constraints (e.g., bridge closures, stock limits) and do not have built-in AI capabilities to instantly structure messy field intelligence into actionable data.
