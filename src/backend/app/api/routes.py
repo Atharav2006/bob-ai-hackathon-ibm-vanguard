@@ -21,9 +21,16 @@ def read_incidents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db
     incidents = db.query(models.Incident).offset(skip).limit(limit).all()
     return incidents
 
+from ..services.watsonx import extract_needs_from_report
+
 @router.post("/reports/", response_model=schemas.Report)
 def create_report(report: schemas.ReportCreate, db: Session = Depends(get_db)):
-    # TODO: Trigger watsonx.ai extraction if raw_text is provided and structured_data is missing
+    # Trigger watsonx.ai extraction if raw_text is provided and structured_data is missing
+    if report.raw_text and not report.structured_data:
+        extracted = extract_needs_from_report(report.raw_text)
+        if extracted:
+            report.structured_data = extracted
+
     db_report = models.Report(**report.model_dump())
     db.add(db_report)
     db.commit()
