@@ -1,6 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .database import engine, Base
+from .api.routes import router
+
+# Create DB tables
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(
     title="Autonomous Disaster Response Planner API",
     description="API for managing disaster response scenarios, parsing field reports, and generating optimized resource allocations.",
@@ -15,12 +21,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(router, prefix="/api")
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "message": "Disaster Response API is running."}
-
-# Future endpoints will include:
-# /api/incidents
-# /api/reports (with watsonx.ai extraction)
-# /api/plans (triggering OR-Tools worker)
-# /api/resources
