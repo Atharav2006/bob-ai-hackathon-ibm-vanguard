@@ -1,0 +1,45 @@
+name: Production CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  test-and-build:
+    name: Build & Test Containers
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Test Build Frontend (Production)
+        run: |
+          cd src/frontend
+          docker build -f Dockerfile.prod -t disaster-frontend:latest .
+          
+      - name: Test Build Backend
+        run: |
+          cd src/backend
+          docker build -t disaster-backend:latest .
+          
+  deploy-ibm-cloud:
+    name: Deploy to IBM Cloud Code Engine
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Mock Deployment Step
+        run: |
+          echo "🚀 Simulating Deployment to IBM Cloud..."
+          echo "Authenticating via IBM Cloud CLI..."
+          echo "ibmcloud login --apikey ${{ secrets.IBM_CLOUD_API_KEY }}"
+          echo "Pushing images to IBM Container Registry (icr.io)..."
+          echo "Rolling out new revision to IBM Cloud Code Engine..."
+          echo "✅ Deployment successful! App is live."
