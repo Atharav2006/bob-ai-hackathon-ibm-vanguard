@@ -1,24 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Polygon, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-// Fix Leaflet's default icon paths
-import iconUrl from 'leaflet/dist/images/marker-icon.png';
-import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
-import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl,
-  iconUrl,
-  shadowUrl,
-});
+import Map, { Source, Layer, NavigationControl, Marker, Popup } from 'react-map-gl';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 export const SituationMap: React.FC = () => {
     const [zones, setZones] = useState<any[]>([]);
     const [resources, setResources] = useState<any[]>([]);
+    const [popupInfo, setPopupInfo] = useState<any | null>(null);
 
     useEffect(() => {
         const fetchMapData = async () => {
@@ -34,49 +24,122 @@ export const SituationMap: React.FC = () => {
         fetchMapData();
     }, []);
 
-    // PostGIS geometries are generally Lon/Lat, but Leaflet uses Lat/Lon!
-    // We must reverse the coordinates for Polygons and Points.
-    const reverseCoords = (coords: number[][]) => coords.map(c => [c[1], c[0]]);
+    // Create a valid GeoJSON FeatureCollection for the Zones
+    const zonesGeoJSON = {
+        type: "FeatureCollection",
+        features: zones.map(z => ({
+            type: "Feature",
+            geometry: z.geojson,
+            properties: { id: z.id, name: z.name }
+        }))
+    };
+
+    // A free raster basemap style (OpenStreetMap) converted for MapLibre WebGL
+    const mapStyle = {
+        version: 8 as const,
+        sources: {
+            "osm": {
+                type: "raster" as const,
+                tiles: ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"],
+                tileSize: 256,
+                attribution: "&copy; OpenStreetMap Contributors"
+            }
+        },
+        layers: [
+            {
+                id: "osm-tiles",
+                type: "raster" as const,
+                source: "osm",
+                minzoom: 0,
+                maxzoom: 19
+            }
+        ]
+    };
 
     return (
         <div style={{ height: '500px', width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
-            <MapContainer center={[1.5, 1.5]} zoom={6} style={{ height: '100%', width: '100%' }}>
-                <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                
-                {/* Render Zones */}
-                {zones.map((zone) => {
-                    if (zone.geojson.type === "Polygon") {
-                        const positions = reverseCoords(zone.geojson.coordinates[0]);
-                        return (
-                            <Polygon key={zone.id} positions={positions as any} pathOptions={{ color: 'red', fillColor: '#ff0000', fillOpacity: 0.3 }}>
-                                <Popup>
-                                    <strong>Zone:</strong> {zone.name} <br/>
-                                </Popup>
-                            </Polygon>
-                        );
+            <Map
+                initialViewState={{
+                    longitude: 1.5,
+                    latitude: 1.5,
+                    zoom: 6,
+                    pitch: 45 // 3D Tilt!
+                }}
+                mapStyle={mapStyle}
+                mapLib={maplibregl}
+                interactiveLayerIds={['zones-fill']}
+                onClick={(event) => {
+                    if (event.features && event.features.length > 0) {
+                        const feature = event.features[0];
+                        setPopupInfo({
+                            lngLat: event.lngLat,
+                            name: feature.properties?.name,
+                            type: 'Zone'
+                        });
                     }
-                    return null;
-                })}
+                }}
+            >
+                <NavigationControl position="top-right" />
 
-                {/* Render Resources */}
+                {/* Render Zones via WebGL GeoJSON Source */}
+                {/* @ts-ignore */}
+                <Source id="zones-source" type="geojson" data={zonesGeoJSON}>
+                    {/* @ts-ignore */}
+                    <Layer 
+                        id="zones-fill"
+                        type="fill"
+                        paint={{
+                            'fill-color': '#ff0000',
+                            'fill-opacity': 0.4
+                        }}
+                    />
+                    {/* @ts-ignore */}
+                    <Layer 
+                        id="zones-line"
+                        type="line"
+                        paint={{
+                            'line-color': '#990000',
+                            'line-width': 2
+                        }}
+                    />
+                </Source>
+
+                {/* Render Resources as HTML Markers on top of WebGL */}
                 {resources.map((res) => {
                     if (res.geojson.type === "Point") {
-                        const pos = [res.geojson.coordinates[1], res.geojson.coordinates[0]];
+                        const [longitude, latitude] = res.geojson.coordinates;
                         return (
-                            <Marker key={res.id} position={pos as any}>
-                                <Popup>
-                                    <strong>Resource:</strong> {res.name} <br/>
-                                    <strong>Mode:</strong> {res.mode}
-                                </Popup>
+                            <Marker 
+                                key={res.id} 
+                                longitude={longitude} 
+                                latitude={latitude}
+                                anchor="bottom"
+                                onClick={e => {
+                                    e.originalEvent.stopPropagation();
+                                    setPopupInfo({ lngLat: { lng: longitude, lat: latitude }, name: res.name, type: `Resource (${res.mode})` });
+                                }}
+                            >
+                                <div style={{ fontSize: '24px', cursor: 'pointer' }}>📍</div>
                             </Marker>
                         );
                     }
                     return null;
                 })}
-            </MapContainer>
+
+                {/* Popups */}
+                {popupInfo && (
+                    <Popup
+                        longitude={popupInfo.lngLat.lng}
+                        latitude={popupInfo.lngLat.lat}
+                        anchor="top"
+                        onClose={() => setPopupInfo(null)}
+                    >
+                        <div style={{ color: 'black', padding: '5px' }}>
+                            <strong>{popupInfo.type}:</strong> {popupInfo.name}
+                        </div>
+                    </Popup>
+                )}
+            </Map>
         </div>
     );
 };
