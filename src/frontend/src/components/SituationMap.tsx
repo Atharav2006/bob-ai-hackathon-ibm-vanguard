@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import Map, { Source, Layer, NavigationControl, Marker, Popup } from 'react-map-gl';
+import React, { useEffect, useState, useRef } from 'react';
+import Map, { Source, Layer, NavigationControl, Popup, MapRef } from 'react-map-gl';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001/api";
 
 export const SituationMap: React.FC = () => {
+    const mapRef = useRef<MapRef>(null);
     const [zones, setZones] = useState<any[]>([]);
     const [resources, setResources] = useState<any[]>([]);
     const [popupInfo, setPopupInfo] = useState<any | null>(null);
@@ -24,6 +25,20 @@ export const SituationMap: React.FC = () => {
         fetchMapData();
     }, []);
 
+    const onMapLoad = () => {
+        // Dramatic cinematic fly-in from Global View to Miami 3D Zones
+        if (mapRef.current) {
+            mapRef.current.flyTo({
+                center: [-80.19, 25.76],
+                zoom: 12,
+                pitch: 65, // Extreme 3D Tilt!
+                bearing: 30, // Slight rotation for dramatic effect
+                duration: 5000, // 5 seconds of smooth flying
+                essential: true
+            });
+        }
+    };
+
     // Create a valid GeoJSON FeatureCollection for the Zones
     const zonesGeoJSON = {
         type: "FeatureCollection",
@@ -41,15 +56,17 @@ export const SituationMap: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '20px 0' }}>
             <div style={{ height: '500px', width: '500px', borderRadius: '50%', overflow: 'hidden', border: '5px solid #0f62fe', boxShadow: '0 0 20px rgba(15, 98, 254, 0.4)' }}>
                 <Map
+                    ref={mapRef}
                     initialViewState={{
-                        longitude: -80.19,
-                        latitude: 25.76,
-                        zoom: 12,
-                        pitch: 60 // Extreme 3D Tilt!
+                        longitude: 0,
+                        latitude: 0,
+                        zoom: 1, // Start out looking at the whole Earth!
+                        pitch: 0
                     }}
+                    onLoad={onMapLoad}
                     mapStyle={mapStyle}
                     mapLib={maplibregl}
-                    interactiveLayerIds={['zones-fill']}
+                    interactiveLayerIds={['zones-fill-3d']}
                     onClick={(event) => {
                         if (event.features && event.features.length > 0) {
                             const feature = event.features[0];
