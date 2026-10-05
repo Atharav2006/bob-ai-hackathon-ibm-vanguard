@@ -8,4 +8,4 @@ pydantic-settings==2.1.0
 geoalchemy2==0.14.2
 ortools==9.8.3296
 networkx==3.2.1
-ibm-watson-machine-learning==1.0.334
+ibm-watson-machine-learning==1.0.370
