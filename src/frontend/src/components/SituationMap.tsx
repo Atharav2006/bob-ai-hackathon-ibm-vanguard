@@ -45,7 +45,7 @@ export const SituationMap: React.FC = () => {
                         longitude: -80.19,
                         latitude: 25.76,
                         zoom: 12,
-                        pitch: 45 // 3D Tilt!
+                        pitch: 60 // Extreme 3D Tilt!
                     }}
                     mapStyle={mapStyle}
                     mapLib={maplibregl}
@@ -68,20 +68,13 @@ export const SituationMap: React.FC = () => {
                     <Source id="zones-source" type="geojson" data={zonesGeoJSON}>
                         {/* @ts-ignore */}
                         <Layer 
-                            id="zones-fill"
-                            type="fill"
+                            id="zones-fill-3d"
+                            type="fill-extrusion"
                             paint={{
-                                'fill-color': '#ff0000',
-                                'fill-opacity': 0.4
-                            }}
-                        />
-                        {/* @ts-ignore */}
-                        <Layer 
-                            id="zones-line"
-                            type="line"
-                            paint={{
-                                'line-color': '#990000',
-                                'line-width': 2
+                                'fill-extrusion-color': '#ff0000',
+                                'fill-extrusion-opacity': 0.6,
+                                'fill-extrusion-height': 800, // 800 meters tall!
+                                'fill-extrusion-base': 0
                             }}
                         />
                     </Source>
