@@ -38,74 +38,55 @@ export const SituationMap: React.FC = () => {
     const mapStyle = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
     return (
-        <div style={{ height: '500px', width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
-            <Map
-                initialViewState={{
-                    longitude: -80.19,
-                    latitude: 25.76,
-                    zoom: 12,
-                    pitch: 45 // 3D Tilt!
-                }}
-                mapStyle={mapStyle}
-                mapLib={maplibregl}
-                interactiveLayerIds={['zones-fill']}
-                onClick={(event) => {
-                    if (event.features && event.features.length > 0) {
-                        const feature = event.features[0];
-                        setPopupInfo({
-                            lngLat: event.lngLat,
-                            name: feature.properties?.name,
-                            type: 'Zone'
-                        });
-                    }
-                }}
-            >
-                <NavigationControl position="top-right" />
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '20px 0' }}>
+            <div style={{ height: '500px', width: '500px', borderRadius: '50%', overflow: 'hidden', border: '5px solid #0f62fe', boxShadow: '0 0 20px rgba(15, 98, 254, 0.4)' }}>
+                <Map
+                    initialViewState={{
+                        longitude: -80.19,
+                        latitude: 25.76,
+                        zoom: 12,
+                        pitch: 45 // 3D Tilt!
+                    }}
+                    mapStyle={mapStyle}
+                    mapLib={maplibregl}
+                    interactiveLayerIds={['zones-fill']}
+                    onClick={(event) => {
+                        if (event.features && event.features.length > 0) {
+                            const feature = event.features[0];
+                            setPopupInfo({
+                                lngLat: event.lngLat,
+                                name: feature.properties?.name,
+                                type: 'Zone'
+                            });
+                        }
+                    }}
+                >
+                    <NavigationControl position="top-right" />
 
-                {/* Render Zones via WebGL GeoJSON Source */}
-                {/* @ts-ignore */}
-                <Source id="zones-source" type="geojson" data={zonesGeoJSON}>
+                    {/* Render Zones via WebGL GeoJSON Source */}
                     {/* @ts-ignore */}
-                    <Layer 
-                        id="zones-fill"
-                        type="fill"
-                        paint={{
-                            'fill-color': '#ff0000',
-                            'fill-opacity': 0.4
-                        }}
-                    />
-                    {/* @ts-ignore */}
-                    <Layer 
-                        id="zones-line"
-                        type="line"
-                        paint={{
-                            'line-color': '#990000',
-                            'line-width': 2
-                        }}
-                    />
-                </Source>
+                    <Source id="zones-source" type="geojson" data={zonesGeoJSON}>
+                        {/* @ts-ignore */}
+                        <Layer 
+                            id="zones-fill"
+                            type="fill"
+                            paint={{
+                                'fill-color': '#ff0000',
+                                'fill-opacity': 0.4
+                            }}
+                        />
+                        {/* @ts-ignore */}
+                        <Layer 
+                            id="zones-line"
+                            type="line"
+                            paint={{
+                                'line-color': '#990000',
+                                'line-width': 2
+                            }}
+                        />
+                    </Source>
 
-                {/* Render Resources as HTML Markers on top of WebGL */}
-                {resources.map((res) => {
-                    if (res.geojson.type === "Point") {
-                        const [longitude, latitude] = res.geojson.coordinates;
-                        return (
-                            <Marker 
-                                key={res.id} 
-                                longitude={longitude} 
-                                latitude={latitude}
-                                anchor="bottom"
-                                onClick={e => {
-                                    e.originalEvent.stopPropagation();
-                                    setPopupInfo({ lngLat: { lng: longitude, lat: latitude }, name: res.name, type: `Resource (${res.mode})` });
-                                }}
-                            >
-                                <div style={{ fontSize: '24px', cursor: 'pointer' }}>📍</div>
-                            </Marker>
-                        );
-                    }
-                    return null;
-                })}
+                    {/* Resources/Points have been removed per user request */}
 
                 {/* Popups */}
                 {popupInfo && (
