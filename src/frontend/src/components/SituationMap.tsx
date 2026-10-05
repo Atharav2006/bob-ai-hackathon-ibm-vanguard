@@ -25,19 +25,20 @@ export const SituationMap: React.FC = () => {
         fetchMapData();
     }, []);
 
-    const onMapLoad = () => {
-        // Dramatic cinematic fly-in from Global View to Miami 3D Zones
-        if (mapRef.current) {
-            mapRef.current.flyTo({
-                center: [-80.19, 25.76],
-                zoom: 12,
-                pitch: 65, // Extreme 3D Tilt!
-                bearing: 30, // Slight rotation for dramatic effect
-                duration: 5000, // 5 seconds of smooth flying
-                essential: true
-            });
-        }
-    };
+    // Cinematic continuous rotation
+    useEffect(() => {
+        let animationId: number;
+        const rotateCamera = () => {
+            if (mapRef.current) {
+                const map = mapRef.current.getMap();
+                const currentBearing = map.getBearing();
+                map.setBearing(currentBearing + 0.1);
+            }
+            animationId = requestAnimationFrame(rotateCamera);
+        };
+        animationId = requestAnimationFrame(rotateCamera);
+        return () => cancelAnimationFrame(animationId);
+    }, []);
 
     // Create a valid GeoJSON FeatureCollection for the Zones
     const zonesGeoJSON = {
@@ -58,12 +59,12 @@ export const SituationMap: React.FC = () => {
                 <Map
                     ref={mapRef}
                     initialViewState={{
-                        longitude: 0,
-                        latitude: 0,
-                        zoom: 1, // Start out looking at the whole Earth!
-                        pitch: 0
+                        longitude: -80.19,
+                        latitude: 25.76,
+                        zoom: 11, 
+                        pitch: 80, // Front View!
+                        bearing: 0
                     }}
-                    onLoad={onMapLoad}
                     mapStyle={mapStyle}
                     mapLib={maplibregl}
                     interactiveLayerIds={['zones-fill-3d']}
@@ -90,7 +91,7 @@ export const SituationMap: React.FC = () => {
                             paint={{
                                 'fill-extrusion-color': '#ff0000',
                                 'fill-extrusion-opacity': 0.6,
-                                'fill-extrusion-height': 800, // 800 meters tall!
+                                'fill-extrusion-height': 4000, // 4 km tall walls!
                                 'fill-extrusion-base': 0
                             }}
                         />
