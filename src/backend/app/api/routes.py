@@ -81,3 +81,24 @@ def approve_plan(plan_id: uuid.UUID, approval: schemas.PlanApprovalRequest, db: 
     Executes an atomic approval, locking resources to prevent double-booking.
     """
     return crud.approve_plan(db, plan_id=plan_id, actor=approval.actor)
+
+import json
+from sqlalchemy import func
+
+@router.get("/map-data")
+def get_map_data(db: Session = Depends(get_db)):
+    # Fetch Zones with GeoJSON
+    zones_query = db.query(models.Zone.id, models.Zone.name, func.ST_AsGeoJSON(models.Zone.geometry).label("geojson")).all()
+    zones = []
+    for z in zones_query:
+        if z.geojson:
+            zones.append({"id": str(z.id), "name": z.name, "geojson": json.loads(z.geojson)})
+            
+    # Fetch Resources with GeoJSON
+    res_query = db.query(models.Resource.id, models.Resource.name, models.Resource.mode, func.ST_AsGeoJSON(models.Resource.location).label("geojson")).all()
+    resources = []
+    for r in res_query:
+        if r.geojson:
+            resources.append({"id": str(r.id), "name": r.name, "mode": r.mode, "geojson": json.loads(r.geojson)})
+            
+    return {"zones": zones, "resources": resources}

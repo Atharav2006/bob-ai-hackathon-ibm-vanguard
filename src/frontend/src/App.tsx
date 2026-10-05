@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import './App.css';
 import ReportForm from './components/ReportForm';
 import PlanningView from './components/PlanningView';
+import { SituationMap } from './components/SituationMap';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'situation' | 'reports' | 'planning'>('planning');
@@ -37,11 +38,9 @@ const App: React.FC = () => {
       <main className="container">
         {activeTab === 'situation' && (
           <div className="card">
-            <h3>Situation Overview</h3>
-            <p>Map component will render here...</p>
-            <div style={{ height: '400px', background: '#e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              Leaflet Map Placeholder
-            </div>
+            <h3>Live Situation Overview</h3>
+            <p>Real-time view of PostGIS emergency zones and available response units.</p>
+            <SituationMap />
           </div>
         )}
 
