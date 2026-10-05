@@ -48,18 +48,31 @@ from ..services.planner import generate_optimized_plan
 @router.post("/plans/generate", response_model=schemas.Plan)
 def generate_plan(snapshot_id: str, policy_version: str = "v1.0", db: Session = Depends(get_db)):
     """
-    Triggers the OR-Tools optimizer. In a real system, this queues a background worker job.
-    For this demo, it runs synchronously.
+    Triggers the OR-Tools optimizer.
     """
-    # 1. Fetch unassigned needs and available resources from DB (Mocked here for brevity)
-    # 2. Run OR-Tools planner
-    # result = generate_optimized_plan(needs, resources)
+    # 1. Fetch needs and resources from DB
+    needs = db.query(models.Need).all()
+    resources = db.query(models.Resource).all()
+    
+    needs_data = [{"id": str(n.id), "urgency": n.urgency, "category": n.category} for n in needs]
+    resources_data = [{"id": str(r.id), "capabilities": r.capabilities} for r in resources]
     
     # Create the Plan candidate in the DB
     plan = crud.create_plan(db, snapshot_id=snapshot_id, policy_version=policy_version)
     
-    # If solver found assignments, we would save them here via crud.add_assignments_to_plan
+    # 2. Run OR-Tools planner
+    if needs_data and resources_data:
+        result = generate_optimized_plan(needs_data, resources_data)
+        plan.solver_status = result["status"]
+        
+        # Save assignments to plan
+        if result["assignments"]:
+            crud.add_assignments_to_plan(db, plan_id=plan.id, assignments_data=result["assignments"])
+    else:
+        plan.solver_status = "NO_DATA"
     
+    db.commit()
+    db.refresh(plan)
     return plan
 
 @router.post("/plans/{plan_id}/approve", response_model=schemas.Plan)
