@@ -1,12 +1,40 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
+import json
 
 from .. import models, schemas
 from ..database import get_db
 
 router = APIRouter()
+
+# WebSocket Manager for Real-Time Updates
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+manager = ConnectionManager()
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 @router.post("/incidents/", response_model=schemas.Incident)
 def create_incident(incident: schemas.IncidentCreate, db: Session = Depends(get_db)):
@@ -132,7 +160,7 @@ from fastapi import Form
 from datetime import datetime
 
 @router.post("/webhooks/sms")
-def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), db: Session = Depends(get_db)):
+async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), db: Session = Depends(get_db)):
     """
     Webhook for Twilio to ingest SMS messages from victims without internet.
     Automatically parses the SMS using IBM watsonx.ai.
@@ -150,5 +178,13 @@ def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), db: Session
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
+    
+    # 3. Broadcast to all connected React Dashboards
+    await manager.broadcast(json.dumps({
+        "event": "new_sms_report",
+        "report_id": db_report.id,
+        "from": From,
+        "body": Body
+    }))
     
     return {"message": "SMS received and processed by IBM Watsonx", "report_id": db_report.id}

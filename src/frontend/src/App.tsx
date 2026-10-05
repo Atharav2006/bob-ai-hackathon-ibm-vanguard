@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import ReportForm from './components/ReportForm';
 import PlanningView from './components/PlanningView';
@@ -6,6 +6,19 @@ import { SituationMap } from './components/SituationMap';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'situation' | 'reports' | 'planning'>('planning');
+
+  useEffect(() => {
+    const ws = new WebSocket('ws://localhost:8000/api/ws');
+    
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.event === "new_sms_report") {
+        alert(`🚨 LIVE ALERT: New Emergency SMS Received!\nFrom: ${data.from}\nMessage: "${data.body}"\n\nIBM Watsonx has already parsed this report and updated the database.`);
+      }
+    };
+
+    return () => ws.close();
+  }, []);
 
   return (
     <div>
