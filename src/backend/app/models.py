@@ -89,6 +89,8 @@ class Plan(Base):
     policy_version = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+    assignments = relationship("Assignment", backref="plan")
+
 class Assignment(Base):
     __tablename__ = "assignments"
     

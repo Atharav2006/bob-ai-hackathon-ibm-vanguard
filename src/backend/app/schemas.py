@@ -58,6 +58,7 @@ class Plan(PlanBase):
     status: str
     solver_status: Optional[str] = None
     created_at: datetime
+    assignments: List[Assignment] = []
 
     class Config:
         from_attributes = True

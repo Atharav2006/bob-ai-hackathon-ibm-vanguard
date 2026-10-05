@@ -13,10 +13,11 @@ def seed_database(db: Session):
     db.add(incident)
     db.commit()
 
-    # Seed 3 Mock Zones (Using WKT for PostGIS Geometry)
-    z1 = models.Zone(incident_id=incident.id, name="Downtown Sector", geometry="POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))")
-    z2 = models.Zone(incident_id=incident.id, name="North Bridge", geometry="POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))")
-    z3 = models.Zone(incident_id=incident.id, name="Industrial Park", geometry="POLYGON((2 2, 2 3, 3 3, 3 2, 2 2))")
+    # Seed 3 Mock Zones (Miami, FL)
+    # Longitude, Latitude
+    z1 = models.Zone(incident_id=incident.id, name="Downtown Sector", geometry="POLYGON((-80.20 25.75, -80.20 25.77, -80.18 25.77, -80.18 25.75, -80.20 25.75))")
+    z2 = models.Zone(incident_id=incident.id, name="Miami Beach", geometry="POLYGON((-80.14 25.78, -80.14 25.80, -80.12 25.80, -80.12 25.78, -80.14 25.78))")
+    z3 = models.Zone(incident_id=incident.id, name="Port of Miami", geometry="POLYGON((-80.18 25.77, -80.18 25.79, -80.16 25.79, -80.16 25.77, -80.18 25.77))")
     db.add_all([z1, z2, z3])
     db.commit()
 
@@ -28,10 +29,10 @@ def seed_database(db: Session):
     db.commit()
 
     # Seed Resources
-    r1 = models.Resource(incident_id=incident.id, name="Medic Team Alpha", mode="road", capabilities={"medical": 10}, location="POINT(0.5 0.5)")
-    r2 = models.Resource(incident_id=incident.id, name="Heavy Rescue Boat 1", mode="boat", capabilities={"rescue": 5}, location="POINT(1.5 1.5)")
-    r3 = models.Resource(incident_id=incident.id, name="Supply Truck A", mode="road", capabilities={"supply": 100}, location="POINT(2.5 2.5)")
-    r4 = models.Resource(incident_id=incident.id, name="Medic Team Beta", mode="road", capabilities={"medical": 10}, location="POINT(0.8 0.8)")
+    r1 = models.Resource(incident_id=incident.id, name="Medic Team Alpha", mode="road", capabilities={"medical": 10}, location="POINT(-80.19 25.76)")
+    r2 = models.Resource(incident_id=incident.id, name="Heavy Rescue Boat 1", mode="boat", capabilities={"rescue": 5}, location="POINT(-80.13 25.79)")
+    r3 = models.Resource(incident_id=incident.id, name="Supply Truck A", mode="road", capabilities={"supply": 100}, location="POINT(-80.17 25.78)")
+    r4 = models.Resource(incident_id=incident.id, name="Medic Team Beta", mode="road", capabilities={"medical": 10}, location="POINT(-80.195 25.755)")
     db.add_all([r1, r2, r3, r4])
     db.commit()
     print("Seeding complete.")
