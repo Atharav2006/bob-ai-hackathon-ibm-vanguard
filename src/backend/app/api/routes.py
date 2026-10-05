@@ -41,3 +41,30 @@ def create_report(report: schemas.ReportCreate, db: Session = Depends(get_db)):
 def read_reports(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     reports = db.query(models.Report).offset(skip).limit(limit).all()
     return reports
+
+from .. import crud
+from ..services.planner import generate_optimized_plan
+
+@router.post("/plans/generate", response_model=schemas.Plan)
+def generate_plan(snapshot_id: str, policy_version: str = "v1.0", db: Session = Depends(get_db)):
+    """
+    Triggers the OR-Tools optimizer. In a real system, this queues a background worker job.
+    For this demo, it runs synchronously.
+    """
+    # 1. Fetch unassigned needs and available resources from DB (Mocked here for brevity)
+    # 2. Run OR-Tools planner
+    # result = generate_optimized_plan(needs, resources)
+    
+    # Create the Plan candidate in the DB
+    plan = crud.create_plan(db, snapshot_id=snapshot_id, policy_version=policy_version)
+    
+    # If solver found assignments, we would save them here via crud.add_assignments_to_plan
+    
+    return plan
+
+@router.post("/plans/{plan_id}/approve", response_model=schemas.Plan)
+def approve_plan(plan_id: uuid.UUID, approval: schemas.PlanApprovalRequest, db: Session = Depends(get_db)):
+    """
+    Executes an atomic approval, locking resources to prevent double-booking.
+    """
+    return crud.approve_plan(db, plan_id=plan_id, actor=approval.actor)

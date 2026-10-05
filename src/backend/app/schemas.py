@@ -36,4 +36,32 @@ class Report(ReportBase):
     class Config:
         from_attributes = True
 
-# We will expand on schemas as we build the CRUD operations.
+class AssignmentBase(BaseModel):
+    need_id: UUID
+    resource_id: UUID
+
+class Assignment(AssignmentBase):
+    id: UUID
+    plan_id: UUID
+    status: str
+    version: int
+
+    class Config:
+        from_attributes = True
+
+class PlanBase(BaseModel):
+    snapshot_id: str
+    policy_version: str
+
+class Plan(PlanBase):
+    id: UUID
+    status: str
+    solver_status: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PlanApprovalRequest(BaseModel):
+    actor: str
+
