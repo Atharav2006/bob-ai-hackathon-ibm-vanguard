@@ -34,35 +34,16 @@ export const SituationMap: React.FC = () => {
         }))
     };
 
-    // A free raster basemap style (OpenStreetMap) converted for MapLibre WebGL
-    const mapStyle = {
-        version: 8 as const,
-        sources: {
-            "osm": {
-                type: "raster" as const,
-                tiles: ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"],
-                tileSize: 256,
-                attribution: "&copy; OpenStreetMap Contributors"
-            }
-        },
-        layers: [
-            {
-                id: "osm-tiles",
-                type: "raster" as const,
-                source: "osm",
-                minzoom: 0,
-                maxzoom: 19
-            }
-        ]
-    };
+    // A free dark-themed vector basemap style (Carto Dark Matter)
+    const mapStyle = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
     return (
         <div style={{ height: '500px', width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
             <Map
                 initialViewState={{
-                    longitude: 1.5,
-                    latitude: 1.5,
-                    zoom: 6,
+                    longitude: -80.19,
+                    latitude: 25.76,
+                    zoom: 12,
                     pitch: 45 // 3D Tilt!
                 }}
                 mapStyle={mapStyle}
