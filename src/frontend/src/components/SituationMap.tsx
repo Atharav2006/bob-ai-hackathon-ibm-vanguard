@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Map, { Source, Layer, NavigationControl, Popup, MapRef } from 'react-map-gl';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001/api";
 
@@ -27,18 +27,17 @@ export const SituationMap: React.FC = () => {
 
     const animationRef = useRef<number | null>(null);
 
-    // Cinematic continuous globe rotation
+    // Cinematic continuous rotation
     useEffect(() => {
-        const rotateGlobe = () => {
+        const rotateCamera = () => {
             if (mapRef.current) {
                 const map = mapRef.current.getMap();
-                const currentCenter = map.getCenter();
-                // Spin the globe by decreasing longitude
-                map.setCenter([currentCenter.lng - 0.2, currentCenter.lat]);
+                const currentBearing = map.getBearing();
+                map.setBearing(currentBearing + 0.1);
             }
-            animationRef.current = requestAnimationFrame(rotateGlobe);
+            animationRef.current = requestAnimationFrame(rotateCamera);
         };
-        animationRef.current = requestAnimationFrame(rotateGlobe);
+        animationRef.current = requestAnimationFrame(rotateCamera);
         return () => {
             if (animationRef.current) cancelAnimationFrame(animationRef.current);
         };
@@ -87,16 +86,15 @@ export const SituationMap: React.FC = () => {
             <div style={{ height: '500px', width: '100%', maxWidth: '800px', overflow: 'hidden', borderRadius: '8px', border: '1px solid #333', position: 'relative' }}>
                 <Map
                     ref={mapRef}
-                    mapboxAccessToken="pk.eyJ1IjoiZHVtbXkiLCJhIjoiY2R1bW15In0.dummy"
                     initialViewState={{
                         longitude: -80.19,
                         latitude: 0,
-                        zoom: 1, // Global zoom!
+                        zoom: 1, // Global flat zoom
                         pitch: 15,
                         bearing: 0
                     }}
-                    projection="globe"
                     mapStyle={mapStyle}
+                    mapLib={maplibregl}
                     interactiveLayerIds={['zones-fill-3d']}
                     onDragStart={() => {
                         if (animationRef.current) {

@@ -12,6 +12,7 @@
   "description": "",
   "dependencies": {
     "mapbox-gl": "^3.32.0",
+    "maplibre-gl": "^4.7.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-map-gl": "^7.1.7"
