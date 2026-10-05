@@ -25,24 +25,6 @@ export const SituationMap: React.FC = () => {
         fetchMapData();
     }, []);
 
-    const animationRef = useRef<number | null>(null);
-
-    // Cinematic continuous rotation
-    useEffect(() => {
-        const rotateCamera = () => {
-            if (mapRef.current) {
-                const map = mapRef.current.getMap();
-                const currentBearing = map.getBearing();
-                map.setBearing(currentBearing + 0.1);
-            }
-            animationRef.current = requestAnimationFrame(rotateCamera);
-        };
-        animationRef.current = requestAnimationFrame(rotateCamera);
-        return () => {
-            if (animationRef.current) cancelAnimationFrame(animationRef.current);
-        };
-    }, []);
-
     // Create a valid GeoJSON FeatureCollection for the Zones
     const zonesGeoJSON = {
         type: "FeatureCollection",
@@ -56,52 +38,21 @@ export const SituationMap: React.FC = () => {
     // A free dark-themed vector basemap style
     const mapStyle = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-    const flyToMiami = () => {
-        if (animationRef.current) {
-            cancelAnimationFrame(animationRef.current);
-            animationRef.current = null;
-        }
-        if (mapRef.current) {
-            mapRef.current.flyTo({
-                center: [-80.19, 25.76],
-                zoom: 12,
-                pitch: 65,
-                bearing: 30,
-                duration: 4000,
-                essential: true
-            });
-        }
-    };
-
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', padding: '20px 0', background: '#000' }}>
-            
-            <button 
-                onClick={flyToMiami}
-                style={{ marginBottom: '15px', background: '#0f62fe', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-                🚀 Zoom to Disaster Zone
-            </button>
-
-            <div style={{ height: '500px', width: '100%', maxWidth: '800px', overflow: 'hidden', borderRadius: '8px', border: '1px solid #333', position: 'relative' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '20px 0', background: '#000' }}>
+            <div style={{ height: '500px', width: '500px', borderRadius: '50%', overflow: 'hidden', border: '5px solid #0f62fe', boxShadow: '0 0 20px rgba(15, 98, 254, 0.4)' }}>
                 <Map
                     ref={mapRef}
                     initialViewState={{
                         longitude: -80.19,
-                        latitude: 0,
-                        zoom: 1, // Global flat zoom
-                        pitch: 15,
+                        latitude: 25.76,
+                        zoom: 11,
+                        pitch: 80,
                         bearing: 0
                     }}
                     mapStyle={mapStyle}
                     mapLib={maplibregl}
                     interactiveLayerIds={['zones-fill-3d']}
-                    onDragStart={() => {
-                        if (animationRef.current) {
-                            cancelAnimationFrame(animationRef.current);
-                            animationRef.current = null;
-                        }
-                    }}
                     onClick={(event) => {
                         if (event.features && event.features.length > 0) {
                             const feature = event.features[0];
