@@ -48,8 +48,11 @@ Do not include any explanation or markdown formatting outside the JSON.
 Fields to extract:
 - category: One of ["rescue", "medical", "supply"]
 - amount: Numeric value (e.g., 5). If unknown, use null.
-- unit: The unit of the amount (e.g., "kits", "people", "litres"). Use "unknown" if not specified.
+- unit: The unit of the amount (e.g., "kits", "people", "litres").
 - urgency: An integer from 1 to 5 (5 being most urgent).
+- original_language: The ISO language code of the raw text (e.g., "es", "en", "fr").
+- english_translation: Translate the raw text into English perfectly.
+- sentiment: The emotional state of the sender (e.g., "Panic", "Calm", "Urgent", "Desperate").
 
 Field Report:
 "{raw_text}"
@@ -60,11 +63,14 @@ JSON Output:
     if model is None:
         # Fallback for local dev without credentials
         return {
-            "category": "supply",
-            "amount": 5,
-            "unit": "mock_kits",
-            "urgency": 4,
-            "note": "Mocked response (no Watsonx credentials provided)"
+            "category": "rescue",
+            "amount": 3,
+            "unit": "people",
+            "urgency": 5,
+            "original_language": "es",
+            "english_translation": "HELP! The bridge collapsed on Main Street. We have 3 injured people, we need a medical team immediately. It looks really bad!",
+            "sentiment": "Panic / Desperate",
+            "note": "Mocked Watsonx Multi-lingual Translation"
         }
     
     try:

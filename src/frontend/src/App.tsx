@@ -13,7 +13,18 @@ const App: React.FC = () => {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.event === "new_sms_report") {
-        alert(`🚨 LIVE ALERT: New Emergency SMS Received!\nFrom: ${data.from}\nMessage: "${data.body}"\n\nIBM Watsonx has already parsed this report and updated the database.`);
+        const lang = data.ai_analysis?.original_language || "Unknown";
+        const trans = data.ai_analysis?.english_translation || data.body;
+        const sent = data.ai_analysis?.sentiment || "Unknown";
+        alert(`🚨 LIVE ALERT: New Emergency SMS Received!
+From: ${data.from}
+Language: ${lang.toUpperCase()}
+Raw Text: "${data.body}"
+
+🤖 IBM Watsonx AI Translation: "${trans}"
+⚠️ Sentiment Analysis: ${sent}
+
+(The database has been updated and structured data extracted)`);
       }
     };
 

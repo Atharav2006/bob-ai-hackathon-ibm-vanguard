@@ -182,9 +182,10 @@ async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), db: S
     # 3. Broadcast to all connected React Dashboards
     await manager.broadcast(json.dumps({
         "event": "new_sms_report",
-        "report_id": db_report.id,
+        "report_id": str(db_report.id),
         "from": From,
-        "body": Body
+        "body": Body,
+        "ai_analysis": extracted_data
     }))
     
     return {"message": "SMS received and processed by IBM Watsonx", "report_id": db_report.id}
