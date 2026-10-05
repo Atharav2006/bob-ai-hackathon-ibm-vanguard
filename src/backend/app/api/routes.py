@@ -127,3 +127,28 @@ def export_assignments(db: Session = Depends(get_db)):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=deployment_audit.csv"}
     )
+
+from fastapi import Form
+from datetime import datetime
+
+@router.post("/webhooks/sms")
+def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), db: Session = Depends(get_db)):
+    """
+    Webhook for Twilio to ingest SMS messages from victims without internet.
+    Automatically parses the SMS using IBM watsonx.ai.
+    """
+    # 1. AI Parsing via Watsonx
+    extracted_data = extract_needs_from_report(Body)
+    
+    # 2. Create the Field Report in DB
+    db_report = models.Report(
+        source=f"SMS ({From})",
+        raw_text=Body,
+        structured_data=extracted_data,
+        observed_at=datetime.utcnow()
+    )
+    db.add(db_report)
+    db.commit()
+    db.refresh(db_report)
+    
+    return {"message": "SMS received and processed by IBM Watsonx", "report_id": db_report.id}
