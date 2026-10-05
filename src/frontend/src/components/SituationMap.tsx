@@ -102,6 +102,7 @@ export const SituationMap: React.FC = () => {
                     </Popup>
                 )}
             </Map>
+            </div>
         </div>
     );
 };
