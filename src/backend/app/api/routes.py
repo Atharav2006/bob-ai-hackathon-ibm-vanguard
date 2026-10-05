@@ -102,3 +102,28 @@ def get_map_data(db: Session = Depends(get_db)):
             resources.append({"id": str(r.id), "name": r.name, "mode": r.mode, "geojson": json.loads(r.geojson)})
             
     return {"zones": zones, "resources": resources}
+
+from fastapi.responses import StreamingResponse
+import io
+import csv
+
+@router.get("/export/assignments")
+def export_assignments(db: Session = Depends(get_db)):
+    """
+    Exports all assignments (deployments) to a CSV file for compliance auditing.
+    """
+    assignments = db.query(models.Assignment).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Plan ID", "Need ID", "Resource ID", "Status", "Version"])
+    
+    for a in assignments:
+        writer.writerow([a.id, a.plan_id, a.need_id, a.resource_id, a.status, a.version])
+        
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=deployment_audit.csv"}
+    )

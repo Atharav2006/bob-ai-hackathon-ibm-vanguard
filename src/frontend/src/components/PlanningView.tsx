@@ -40,9 +40,19 @@ const PlanningView: React.FC = () => {
       <div className="card">
         <h3>🧠 OR-Tools Optimizer</h3>
         <p>Run the CP-SAT optimization engine to match resources to needs optimally within a 5-second computation limit.</p>
-        <button className="success" onClick={generatePlan} disabled={loading}>
-          {loading ? "Optimizing..." : "Generate Candidate Plan"}
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="success" onClick={generatePlan} disabled={loading}>
+            {loading ? "Optimizing..." : "Generate Candidate Plan"}
+            </button>
+            <a 
+                href="http://localhost:8000/api/export/assignments" 
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ background: '#24a148', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '4px', cursor: 'pointer', textDecoration: 'none' }}
+            >
+                Download Audit CSV
+            </a>
+        </div>
       </div>
 
       {plan && (
