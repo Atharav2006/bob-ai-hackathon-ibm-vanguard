@@ -31,6 +31,8 @@ services:
       context: ./frontend
     ports:
       - "3000:5173"
+    env_file:
+      - ./frontend/.env
     environment:
       - CHOKIDAR_USEPOLLING=true
 
