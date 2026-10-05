@@ -29,6 +29,28 @@ const ReportForm: React.FC = () => {
     }
   };
 
+  const [listening, setListening] = useState(false);
+  
+  const handleDictate = () => {
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Your browser does not support Speech Recognition.");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    recognition.onstart = () => setListening(true);
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setReportText((prev) => prev + (prev ? " " : "") + transcript);
+    };
+    recognition.onend = () => setListening(false);
+    recognition.start();
+  };
+
   return (
     <div className="card">
       <h3>📥 Submit Field Report</h3>
@@ -40,9 +62,15 @@ const ReportForm: React.FC = () => {
         onChange={e => setReportText(e.target.value)}
         placeholder="e.g., We have a flooded bridge on Route 9 and need 5 medical kits urgently."
       />
-      <button onClick={handleSubmit} disabled={loading}>
-        {loading ? "Extracting..." : "Submit to Watsonx.ai"}
-      </button>
+      
+      <div style={{ display: 'flex', gap: '10px' }}>
+        <button onClick={handleDictate} disabled={listening} style={{ background: '#f1c21b', color: 'black' }}>
+          {listening ? "🔴 Listening..." : "🎤 Dictate with Voice"}
+        </button>
+        <button onClick={handleSubmit} disabled={loading || listening}>
+          {loading ? "Extracting..." : "Submit to Watsonx.ai"}
+        </button>
+      </div>
 
       {result && (
         <div style={{ marginTop: '2rem', background: '#f8f9fa', padding: '1rem', border: '1px solid #ddd' }}>
