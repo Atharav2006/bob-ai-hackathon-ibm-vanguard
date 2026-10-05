@@ -8,7 +8,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'situation' | 'reports' | 'planning'>('planning');
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/api/ws');
+    const ws = new WebSocket('ws://localhost:8001/api/ws');
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);

@@ -1,7 +1,7 @@
 import requests
 import time
 
-API_URL = "http://localhost:8000/api/webhooks/sms"
+API_URL = "http://localhost:8001/api/webhooks/sms"
 
 print("Simulating an incoming SMS from a victim without internet access...\n")
 

@@ -19,7 +19,7 @@ services:
     build:
       context: ./backend
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       DATABASE_URL: postgresql://disaster_user:disaster_password@db:5432/disaster_db
     depends_on:

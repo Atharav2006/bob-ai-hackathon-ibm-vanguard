@@ -10,7 +10,7 @@ const ReportForm: React.FC = () => {
     setResult(null);
     try {
       // Calling our FastAPI backend
-      const response = await fetch('http://localhost:8000/api/reports/', {
+      const response = await fetch('http://localhost:8001/api/reports/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

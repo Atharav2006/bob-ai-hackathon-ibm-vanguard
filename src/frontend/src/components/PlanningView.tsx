@@ -7,7 +7,7 @@ const PlanningView: React.FC = () => {
   const generatePlan = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/plans/generate?snapshot_id=snap_123', {
+      const response = await fetch('http://localhost:8001/api/plans/generate?snapshot_id=snap_123', {
         method: 'POST'
       });
       const data = await response.json();
@@ -22,7 +22,7 @@ const PlanningView: React.FC = () => {
   const approvePlan = async () => {
     if (!plan) return;
     try {
-      const response = await fetch(`http://localhost:8000/api/plans/${plan.id}/approve`, {
+      const response = await fetch(`http://localhost:8001/api/plans/${plan.id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actor: 'Alex Coordinator' })
@@ -45,7 +45,7 @@ const PlanningView: React.FC = () => {
             {loading ? "Optimizing..." : "Generate Candidate Plan"}
             </button>
             <a 
-                href="http://localhost:8000/api/export/assignments" 
+                href="http://localhost:8001/api/export/assignments" 
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ background: '#24a148', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '4px', cursor: 'pointer', textDecoration: 'none' }}
