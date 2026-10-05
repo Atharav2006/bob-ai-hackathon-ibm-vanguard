@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Map, { Source, Layer, NavigationControl, Popup, MapRef } from 'react-map-gl';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001/api";
 
@@ -25,19 +25,23 @@ export const SituationMap: React.FC = () => {
         fetchMapData();
     }, []);
 
-    // Cinematic continuous rotation
+    const animationRef = useRef<number | null>(null);
+
+    // Cinematic continuous globe rotation
     useEffect(() => {
-        let animationId: number;
-        const rotateCamera = () => {
+        const rotateGlobe = () => {
             if (mapRef.current) {
                 const map = mapRef.current.getMap();
-                const currentBearing = map.getBearing();
-                map.setBearing(currentBearing + 0.1);
+                const currentCenter = map.getCenter();
+                // Spin the globe by decreasing longitude
+                map.setCenter([currentCenter.lng - 0.2, currentCenter.lat]);
             }
-            animationId = requestAnimationFrame(rotateCamera);
+            animationRef.current = requestAnimationFrame(rotateGlobe);
         };
-        animationId = requestAnimationFrame(rotateCamera);
-        return () => cancelAnimationFrame(animationId);
+        animationRef.current = requestAnimationFrame(rotateGlobe);
+        return () => {
+            if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        };
     }, []);
 
     // Create a valid GeoJSON FeatureCollection for the Zones
@@ -50,24 +54,56 @@ export const SituationMap: React.FC = () => {
         }))
     };
 
-    // A free dark-themed vector basemap style (Carto Dark Matter)
+    // A free dark-themed vector basemap style
     const mapStyle = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
+    const flyToMiami = () => {
+        if (animationRef.current) {
+            cancelAnimationFrame(animationRef.current);
+            animationRef.current = null;
+        }
+        if (mapRef.current) {
+            mapRef.current.flyTo({
+                center: [-80.19, 25.76],
+                zoom: 12,
+                pitch: 65,
+                bearing: 30,
+                duration: 4000,
+                essential: true
+            });
+        }
+    };
+
     return (
-        <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '20px 0' }}>
-            <div style={{ height: '500px', width: '500px', borderRadius: '50%', overflow: 'hidden', border: '5px solid #0f62fe', boxShadow: '0 0 20px rgba(15, 98, 254, 0.4)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', padding: '20px 0', background: '#000' }}>
+            
+            <button 
+                onClick={flyToMiami}
+                style={{ marginBottom: '15px', background: '#0f62fe', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+                🚀 Zoom to Disaster Zone
+            </button>
+
+            <div style={{ height: '500px', width: '100%', maxWidth: '800px', overflow: 'hidden', borderRadius: '8px', border: '1px solid #333', position: 'relative' }}>
                 <Map
                     ref={mapRef}
+                    mapboxAccessToken="pk.eyJ1IjoiZHVtbXkiLCJhIjoiY2R1bW15In0.dummy"
                     initialViewState={{
                         longitude: -80.19,
-                        latitude: 25.76,
-                        zoom: 11, 
-                        pitch: 80, // Front View!
+                        latitude: 0,
+                        zoom: 1, // Global zoom!
+                        pitch: 15,
                         bearing: 0
                     }}
+                    projection="globe"
                     mapStyle={mapStyle}
-                    mapLib={maplibregl}
                     interactiveLayerIds={['zones-fill-3d']}
+                    onDragStart={() => {
+                        if (animationRef.current) {
+                            cancelAnimationFrame(animationRef.current);
+                            animationRef.current = null;
+                        }
+                    }}
                     onClick={(event) => {
                         if (event.features && event.features.length > 0) {
                             const feature = event.features[0];
