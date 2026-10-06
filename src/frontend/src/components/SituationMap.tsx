@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Map, { Source, Layer, NavigationControl, Popup, MapRef } from 'react-map-gl';
-import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001/api";
@@ -70,7 +69,7 @@ export const SituationMap: React.FC = () => {
                         pitch: 15,
                         bearing: 0
                     }}
-                    projection="globe"
+                    projection={{ name: "globe" }}
                     mapStyle={mapStyle}
                     interactiveLayerIds={['zones-fill-3d']}
                     onClick={(event) => {
