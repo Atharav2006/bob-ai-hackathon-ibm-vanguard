@@ -1,3 +1,4 @@
+from .. import auth
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import List
@@ -37,7 +38,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 @router.post("/incidents/", response_model=schemas.Incident)
-def create_incident(incident: schemas.IncidentCreate, db: Session = Depends(get_db)):
+def create_incident(incident: schemas.IncidentCreate, db: Session = Depends(get_db), current_user = Depends(auth.require_role(['admin']))):
     db_incident = models.Incident(**incident.model_dump())
     db.add(db_incident)
     db.commit()
@@ -45,14 +46,14 @@ def create_incident(incident: schemas.IncidentCreate, db: Session = Depends(get_
     return db_incident
 
 @router.get("/incidents/", response_model=List[schemas.Incident])
-def read_incidents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_incidents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user = Depends(auth.get_current_active_user)):
     incidents = db.query(models.Incident).offset(skip).limit(limit).all()
     return incidents
 
 from ..services.watsonx import extract_needs_from_report
 
 @router.post("/reports/", response_model=schemas.Report)
-def create_report(report: schemas.ReportCreate, db: Session = Depends(get_db)):
+def create_report(report: schemas.ReportCreate, db: Session = Depends(get_db), current_user = Depends(auth.get_current_active_user)):
     # Trigger watsonx.ai extraction if raw_text is provided and structured_data is missing
     if report.raw_text and not report.structured_data:
         extracted = extract_needs_from_report(report.raw_text)
@@ -104,11 +105,17 @@ def generate_plan(snapshot_id: str, policy_version: str = "v1.0", db: Session = 
     return plan
 
 @router.post("/plans/{plan_id}/approve", response_model=schemas.Plan)
-def approve_plan(plan_id: uuid.UUID, approval: schemas.PlanApprovalRequest, db: Session = Depends(get_db)):
+def approve_plan(plan_id: uuid.UUID, approval: schemas.PlanApprovalRequest, db: Session = Depends(get_db), current_user = Depends(auth.require_role(['admin']))):
     """
     Executes an atomic approval, locking resources to prevent double-booking.
     """
-    return crud.approve_plan(db, plan_id=plan_id, actor=approval.actor)
+    return crud.approve_plan(
+        db, 
+        plan_id=plan_id, 
+        actor=approval.actor,
+        expected_version=approval.expected_version,
+        idempotency_key=approval.idempotency_key
+    )
 
 import json
 from sqlalchemy import func
@@ -136,7 +143,7 @@ import io
 import csv
 
 @router.get("/export/assignments")
-def export_assignments(db: Session = Depends(get_db)):
+def export_assignments(db: Session = Depends(get_db), current_user = Depends(auth.require_role(['admin', 'planner']))):
     """
     Exports all assignments (deployments) to a CSV file for compliance auditing.
     """
@@ -160,17 +167,23 @@ from fastapi import Form
 from datetime import datetime
 
 @router.post("/webhooks/sms")
-async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), db: Session = Depends(get_db)):
+async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), MessageSid: str = Form(None), db: Session = Depends(get_db)):
     """
     Webhook for Twilio to ingest SMS messages from victims without internet.
     Automatically parses the SMS using IBM watsonx.ai.
     """
+    if MessageSid:
+        existing = db.query(models.Report).filter(models.Report.external_id == MessageSid).first()
+        if existing:
+            return {"message": "Duplicate SMS ignored", "report_id": existing.id}
+
     # 1. AI Parsing via Watsonx
     extracted_data = extract_needs_from_report(Body)
     
     # 2. Create the Field Report in DB
     db_report = models.Report(
         source=f"SMS ({From})",
+        external_id=MessageSid,
         raw_text=Body,
         structured_data=extracted_data,
         observed_at=datetime.utcnow()
@@ -179,7 +192,22 @@ async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), db: S
     db.commit()
     db.refresh(db_report)
     
-    # 3. Broadcast to all connected React Dashboards
+    # 3. Create or update an Operational Need based on the report
+    if extracted_data and "category" in extracted_data:
+        # For simplicity, assign to the first zone if location matching isn't implemented
+        zone = db.query(models.Zone).first()
+        if zone:
+            new_need = models.Need(
+                zone_id=zone.id,
+                category=extracted_data.get("category", "rescue"),
+                amount=extracted_data.get("amount", 1),
+                unit=extracted_data.get("unit", "unknown"),
+                urgency=extracted_data.get("urgency", 3)
+            )
+            db.add(new_need)
+            db.commit()
+    
+    # 4. Broadcast to all connected React Dashboards
     await manager.broadcast(json.dumps({
         "event": "new_sms_report",
         "report_id": str(db_report.id),

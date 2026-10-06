@@ -8,6 +8,20 @@ class IncidentBase(BaseModel):
     mode: str = "simulation"
     timezone: str = "UTC"
 
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "responder"
+
+class UserOut(BaseModel):
+    id: UUID
+    username: str
+    role: str
+    is_active: int
+
+    class Config:
+        from_attributes = True
+
 class IncidentCreate(IncidentBase):
     pass
 
@@ -56,6 +70,7 @@ class PlanBase(BaseModel):
 class Plan(PlanBase):
     id: UUID
     status: str
+    version: int
     solver_status: Optional[str] = None
     created_at: datetime
     assignments: List[Assignment] = []
@@ -65,4 +80,6 @@ class Plan(PlanBase):
 
 class PlanApprovalRequest(BaseModel):
     actor: str
+    expected_version: Optional[int] = None
+    idempotency_key: Optional[str] = None
 

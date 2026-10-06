@@ -31,15 +31,26 @@ def add_assignments_to_plan(db: Session, plan_id: uuid.UUID, assignments_data: L
     db.commit()
     return assignments
 
-def approve_plan(db: Session, plan_id: uuid.UUID, actor: str):
+def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: int = None, idempotency_key: str = None):
     """
     Executes the atomic approval transaction with explicit row locks.
     Prevents double-booking of resources.
     """
+    # Idempotency check: check audit logs for this exact action
+    if idempotency_key:
+        existing_audit = db.query(models.AuditLog).filter_by(operation_id=idempotency_key).first()
+        if existing_audit:
+            # Already processed, just return the plan
+            plan = db.query(models.Plan).filter(models.Plan.id == plan_id).first()
+            return plan
+
     # 1. Fetch the plan
     plan = db.query(models.Plan).filter(models.Plan.id == plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+    
+    if expected_version is not None and plan.version != expected_version:
+        raise HTTPException(status_code=409, detail=f"Plan version mismatch (Expected {expected_version}, got {plan.version})")
     
     if plan.status != "candidate":
         raise HTTPException(status_code=400, detail=f"Cannot approve plan in status: {plan.status}")
@@ -84,6 +95,9 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str):
         
         for assignment in assignments:
             assignment.status = "assigned"
+
+        for resource in locked_resources:
+            resource.status = "committed"
 
         # 6. Audit Trail
         audit = models.AuditLog(

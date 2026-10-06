@@ -25,9 +25,13 @@ const PlanningView: React.FC = () => {
       const response = await fetch(`http://localhost:8001/api/plans/${plan.id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actor: 'Alex Coordinator' })
+        body: JSON.stringify({ actor: 'Alex Coordinator', expected_version: plan.version, idempotency_key: `approve_${plan.id}` })
       });
       const data = await response.json();
+      if (!response.ok) {
+          alert(`Failed to approve plan: ${data.detail}`);
+          return;
+      }
       setPlan(data);
       alert("Plan approved and locked atomically in PostgreSQL!");
     } catch (err) {

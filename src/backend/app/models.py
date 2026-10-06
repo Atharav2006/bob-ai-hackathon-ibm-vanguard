@@ -12,6 +12,33 @@ class IncidentMode(str, enum.Enum):
     SIMULATION = "simulation"
     OPERATIONAL = "operational"
 
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"
+    PLANNER = "planner"
+    RESPONDER = "responder"
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(Enum(UserRole), default=UserRole.RESPONDER)
+    is_active = Column(Integer, default=1)
+    
+    memberships = relationship("IncidentMembership", back_populates="user")
+
+class IncidentMembership(Base):
+    __tablename__ = "incident_memberships"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    incident_id = Column(UUID(as_uuid=True), ForeignKey("incidents.id"), nullable=False)
+    role = Column(Enum(UserRole), nullable=True) # Override role for this specific incident
+    
+    user = relationship("User", back_populates="memberships")
+    incident = relationship("Incident", back_populates="memberships")
+
 class Incident(Base):
     __tablename__ = "incidents"
     
@@ -25,6 +52,7 @@ class Incident(Base):
 
     zones = relationship("Zone", back_populates="incident")
     resources = relationship("Resource", back_populates="incident")
+    memberships = relationship("IncidentMembership", back_populates="incident")
 
 class Zone(Base):
     __tablename__ = "zones"
@@ -42,11 +70,13 @@ class Report(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     event_id = Column(String, nullable=True) # Used for deduplication
+    external_id = Column(String, unique=True, nullable=True) # E.g. Twilio MessageSid
     source = Column(String, nullable=False)
     observed_at = Column(DateTime, nullable=False)
     received_at = Column(DateTime, default=datetime.datetime.utcnow)
     raw_text = Column(String, nullable=True) # Unstructured data for Watsonx
     structured_data = Column(JSON, nullable=True) # Extracted data
+    status = Column(String, default="pending") # pending, reviewed, rejected
 
 class NeedCategory(str, enum.Enum):
     RESCUE = "rescue"
@@ -75,6 +105,7 @@ class Resource(Base):
     mode = Column(String, nullable=False) # e.g., 'road', 'boat'
     capabilities = Column(JSON, nullable=True)
     location = Column(Geometry(geometry_type='POINT', srid=4326), nullable=True)
+    status = Column(String, default="available") # available, committed, maintenance
     version = Column(Integer, default=1)
     
     incident = relationship("Incident", back_populates="resources")
@@ -87,6 +118,7 @@ class Plan(Base):
     status = Column(String, default="candidate") # candidate, approved, rejected, stale
     solver_status = Column(String, nullable=True) # OPTIMAL, FEASIBLE, etc.
     policy_version = Column(String, nullable=False)
+    version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     assignments = relationship("Assignment", backref="plan")
