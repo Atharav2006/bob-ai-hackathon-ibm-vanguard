@@ -8,15 +8,18 @@ def generate_optimized_plan(needs: List[Dict], resources: List[Dict]):
     
     valid_needs = []
     for n in needs:
-        try:
-            val = float(n.get("amount") or 1)
-            amount = math.ceil(val)
-        except:
-            amount = 1
-        
-        if amount <= 0:
-            continue
+        amt_raw = n.get("amount")
+        if amt_raw is None:
+            amount = 1.0
+        else:
+            amount = float(amt_raw)
             
+        if amount == 0:
+            continue
+        elif not amount.is_integer():
+            raise ValueError("Fractional quantities are not supported. Provide integer amounts.")
+            
+        amount = int(amount)
         cat = str(n.get("category")).split('.')[-1].lower()
         valid_needs.append({"id": n.get("id"), "category": cat, "urgency": n.get("urgency", 1), "amount": amount})
         
@@ -25,11 +28,13 @@ def generate_optimized_plan(needs: List[Dict], resources: List[Dict]):
         caps = r.get("capabilities")
         if not isinstance(caps, dict):
             caps = {}
-        # Lowercase all capability keys and float-parse values
+        # Lowercase all capability keys and parse integers
         parsed_caps = {}
         for k, v in caps.items():
-            try: parsed_caps[k.lower()] = math.ceil(float(v))
-            except: pass
+            val = float(v)
+            if not val.is_integer():
+                raise ValueError("Fractional capacities are not supported. Provide integer capabilities.")
+            parsed_caps[k.lower()] = int(val)
             
         valid_resources.append({"id": r.get("id"), "caps": parsed_caps, "version": r.get("version", 1)})
         
@@ -42,11 +47,24 @@ def generate_optimized_plan(needs: List[Dict], resources: List[Dict]):
             assignments[(n_idx, r_idx)] = model.NewIntVar(0, capacity, f"assign_n{n_idx}_r{r_idx}")
 
     # A resource can only be assigned up to its capability in that category
+    # (Per-category enforcement as well as aggregate enforcement if needed)
     for r_idx, resource in enumerate(valid_resources):
-        r_vars = [assignments[(n, r_idx)] for n in range(len(valid_needs)) if (n, r_idx) in assignments]
-        if r_vars:
+        vars_by_category = {}
+        for n_idx, need in enumerate(valid_needs):
+            if (n_idx, r_idx) in assignments:
+                cat = need["category"]
+                vars_by_category.setdefault(cat, []).append(assignments[(n_idx, r_idx)])
+        
+        total_vars = []
+        for cat, v_list in vars_by_category.items():
+            cat_cap = resource["caps"].get(cat, 0)
+            # strictly limit allocation of this category to the capacity for this category
+            model.Add(sum(v_list) <= cat_cap)
+            total_vars.extend(v_list)
+            
+        if total_vars:
             max_cap = max(list(resource["caps"].values()) + [0])
-            model.Add(sum(r_vars) <= max_cap)
+            model.Add(sum(total_vars) <= max_cap)
             
     # A need can be served up to its requested amount
     for n_idx, need in enumerate(valid_needs):
