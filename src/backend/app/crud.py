@@ -27,6 +27,7 @@ def add_assignments_to_plan(db: Session, plan_id: uuid.UUID, assignments_data: L
             plan_id=plan_id,
             need_id=data["need_id"],
             resource_id=data["resource_id"],
+            amount_assigned=data.get("amount_assigned", 1),
             resource_version=data.get("resource_version", 1),
             status="proposed"
         )

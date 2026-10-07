@@ -57,6 +57,8 @@ class AssignmentBase(BaseModel):
 class Assignment(AssignmentBase):
     id: UUID
     plan_id: UUID
+    amount_assigned: int
+    resource_version: int
     status: str
     version: int
 

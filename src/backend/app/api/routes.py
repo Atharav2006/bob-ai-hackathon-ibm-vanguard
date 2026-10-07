@@ -13,27 +13,75 @@ router = APIRouter()
 # WebSocket Manager for Real-Time Updates
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections = {}
+        self.connection_incidents = {}
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections.append(websocket)
+
+    def register(self, websocket: WebSocket, incident_id: str):
+        if incident_id not in self.active_connections:
+            self.active_connections[incident_id] = []
+        self.active_connections[incident_id].append(websocket)
+        self.connection_incidents[websocket] = incident_id
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        incident_id = self.connection_incidents.get(websocket)
+        if incident_id and incident_id in self.active_connections:
+            if websocket in self.active_connections[incident_id]:
+                self.active_connections[incident_id].remove(websocket)
+            del self.connection_incidents[websocket]
 
     async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
+        pass
+
+    async def broadcast_to_incident(self, message: str, incident_id: str):
+        if incident_id in self.active_connections:
+            for connection in self.active_connections[incident_id]:
+                await connection.send_text(message)
 
 manager = ConnectionManager()
 
+from jose import jwt, JWTError
+
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db)):
     await manager.connect(websocket)
+    authenticated = False
+    incident_id = None
     try:
         while True:
-            data = await websocket.receive_text()
+            data_text = await websocket.receive_text()
+            try:
+                data = json.loads(data_text)
+            except:
+                continue
+            
+            if not authenticated and data.get("type") == "authenticate":
+                token = data.get("token")
+                inc_id = data.get("incident_id")
+                
+                try:
+                    payload = jwt.decode(token, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+                    username: str = payload.get("sub")
+                    user = db.query(models.User).filter(models.User.username == username).first()
+                    if not user or not user.is_active: raise Exception()
+                    
+                    incident = db.query(models.Incident).filter_by(id=inc_id).first()
+                    if not incident: raise Exception()
+                    
+                    if user.role != models.UserRole.ADMIN:
+                        membership = db.query(models.IncidentMembership).filter_by(user_id=user.id, incident_id=inc_id).first()
+                        if not membership: raise Exception()
+                        
+                    authenticated = True
+                    incident_id = str(inc_id)
+                    manager.register(websocket, incident_id)
+                    await websocket.send_text(json.dumps({"type": "authenticated", "status": "success"}))
+                except Exception:
+                    await websocket.send_text(json.dumps({"type": "error", "message": "Authentication failed"}))
+                    await websocket.close(code=1008)
+                    return
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
@@ -215,14 +263,18 @@ async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), Messa
             db_report.status = "needs_review"
             db.commit()
     
-    # 4. Broadcast to all connected React Dashboards
-    await manager.broadcast(json.dumps({
+    # 4. Broadcast to connected React Dashboards for the first operational incident
+    incident = db.query(models.Incident).filter_by(mode="OPERATIONAL").first()
+    if incident:
+        db_report.incident_id = incident.id
+        db.commit()
+        await manager.broadcast_to_incident(json.dumps({
         "event": "new_sms_report",
         "report_id": str(db_report.id),
         "from": From,
         "body": Body,
         "ai_analysis": extracted_data
-    }))
+    }), str(incident.id))
     
     return {"message": "SMS received and processed by IBM Watsonx", "report_id": db_report.id}
 

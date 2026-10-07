@@ -143,6 +143,7 @@ class Assignment(Base):
     plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id"), nullable=False)
     need_id = Column(UUID(as_uuid=True), ForeignKey("needs.id"), nullable=False)
     resource_id = Column(UUID(as_uuid=True), ForeignKey("resources.id"), nullable=False)
+    amount_assigned = Column(Integer, nullable=False, default=1)
     resource_version = Column(Integer, nullable=False, default=1)
     status = Column(String, default="proposed") # proposed, assigned, acknowledged, en_route, on_site, completed
     version = Column(Integer, default=1)
