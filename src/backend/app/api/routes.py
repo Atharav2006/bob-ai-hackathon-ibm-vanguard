@@ -68,32 +68,40 @@ def create_report(report: schemas.ReportCreate, db: Session = Depends(get_db), c
 
 @router.get("/reports/", response_model=List[schemas.Report])
 def read_reports(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    reports = db.query(models.Report).offset(skip).limit(limit).all()
+    reports = db.query(models.Report).filter(models.Report.incident_id == current_incident.id).offset(skip).limit(limit).all()
     return reports
 
 from .. import crud
 from ..services.planner import generate_optimized_plan
 
 @router.post("/plans/generate", response_model=schemas.Plan)
-def generate_plan(snapshot_id: str, policy_version: str = "v1.0", db: Session = Depends(get_db)):
+def generate_plan(snapshot_id: str, policy_version: str = "v1.0", db: Session = Depends(get_db), current_user = Depends(auth.require_role(["admin", "planner"])), current_incident: models.Incident = Depends(auth.get_current_incident)):
     """
     Triggers the OR-Tools optimizer.
     """
     # 1. Fetch needs and resources from DB
-    needs = db.query(models.Need).all()
-    resources = db.query(models.Resource).filter(models.Resource.status == "available").all()
+    needs = db.query(models.Need).join(models.Zone).filter(models.Zone.incident_id == current_incident.id).all()
+    resources = db.query(models.Resource).filter(
+        models.Resource.status == "available", 
+        models.Resource.incident_id == current_incident.id
+    ).all()
     
-    needs_data = [{"id": str(n.id), "urgency": n.urgency, "category": n.category} for n in needs]
-    resources_data = [{"id": str(r.id), "capabilities": r.capabilities} for r in resources]
+    needs_data = [{"id": str(n.id), "urgency": n.urgency, "category": n.category, "amount": n.amount} for n in needs]
+    resources_data = [{"id": str(r.id), "capabilities": r.capabilities, "version": r.version} for r in resources]
     
     # Create the Plan candidate in the DB
-    plan = crud.create_plan(db, snapshot_id=snapshot_id, policy_version=policy_version)
+    plan = crud.create_plan(db, incident_id=current_incident.id, snapshot_id=snapshot_id, policy_version=policy_version, incident_revision=current_incident.revision)
     
     # 2. Run OR-Tools planner
     if needs_data and resources_data:
         result = generate_optimized_plan(needs_data, resources_data)
         plan.solver_status = result["status"]
         
+        # Map back resources to their versions
+        resource_version_map = {str(r.id): r.version for r in resources}
+        for assignment in result.get("assignments", []):
+            assignment["resource_version"] = resource_version_map.get(str(assignment["resource_id"]), 1)
+            
         # Save assignments to plan
         if result["assignments"]:
             crud.add_assignments_to_plan(db, plan_id=plan.id, assignments_data=result["assignments"])
@@ -113,7 +121,7 @@ def approve_plan(plan_id: uuid.UUID, approval: schemas.PlanApprovalRequest, db: 
     return crud.approve_plan(
         db, 
         plan_id=plan_id, 
-        actor=approval.actor,
+        actor=current_user.username,
         expected_version=approval.expected_version,
         idempotency_key=approval.idempotency_key,
         payload_hash=payload_hash
@@ -200,26 +208,9 @@ async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), Messa
         existing = db.query(models.Report).filter(models.Report.external_id == MessageSid).first()
         return {"message": "Duplicate SMS ignored (IntegrityError)", "report_id": existing.id}
     
-    # 3. Create or update an Operational Need based on the report
-    if extracted_data and "category" in extracted_data:
-        amount = extracted_data.get("amount")
-        needs_review = False
-        if amount is None or extracted_data.get("category") not in ["rescue", "medical", "supply"]:
-            needs_review = True
-            
-        if not needs_review:
-            zone = db.query(models.Zone).first()
-            if zone:
-                new_need = models.Need(
-                    zone_id=zone.id,
-                    category=extracted_data.get("category", "rescue"),
-                    amount=amount,
-                    unit=extracted_data.get("unit", "unknown"),
-                    urgency=extracted_data.get("urgency", 3)
-                )
-                db.add(new_need)
-                db_report.status = "verified"
-                db.commit()
+    # No automatic Need creation. Let human planners review it in the UI.
+    db_report.status = "pending"
+    db.commit()
         else:
             db_report.status = "needs_review"
             db.commit()
@@ -234,3 +225,31 @@ async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), Messa
     }))
     
     return {"message": "SMS received and processed by IBM Watsonx", "report_id": db_report.id}
+
+
+@router.post("/reports/{report_id}/review", response_model=schemas.Report)
+def review_report(report_id: uuid.UUID, review: schemas.ReportReviewRequest, db: Session = Depends(get_db), current_user = Depends(auth.require_role(["admin", "planner"])), current_incident: models.Incident = Depends(auth.get_current_incident)):
+    report = db.query(models.Report).filter(models.Report.id == report_id, models.Report.incident_id == current_incident.id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+        
+    if review.action == "reject":
+        report.status = "rejected"
+    elif review.action == "approve":
+        report.status = "verified"
+        if review.zone_id and review.need_category:
+            new_need = models.Need(
+                zone_id=review.zone_id,
+                category=review.need_category,
+                amount=review.need_amount,
+                urgency=review.need_urgency or 3,
+                unit="unknown"
+            )
+            db.add(new_need)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action")
+        
+    db.commit()
+    db.refresh(report)
+    return report
+

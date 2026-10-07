@@ -1,66 +1,81 @@
-from ortools.sat.python import cp_model
+﻿from ortools.sat.python import cp_model
 from typing import List, Dict
 
 def generate_optimized_plan(needs: List[Dict], resources: List[Dict]):
-    """
-    Uses OR-Tools CP-SAT solver to generate an optimized allocation of resources to needs.
-    This is a simplified knapsack-style assignment model for the hackathon baseline.
-    """
     model = cp_model.CpModel()
     
-    # 1. Decision Variables
-    # x[(n_idx, r_idx)] = 1 if resource r is assigned to need n
     assignments = {}
-    for n_idx, need in enumerate(needs):
-        category = need.get('category')
-        for r_idx, resource in enumerate(resources):
-            caps = resource.get('capabilities', {})
-            if category not in caps:
-                continue
-            assignments[(n_idx, r_idx)] = model.NewBoolVar(f'assign_n{n_idx}_r{r_idx}')
-
-    # 2. Constraints
-    # A resource can only be assigned to at most one need at a time in this time horizon
-    for r_idx, resource in enumerate(resources):
-        model.Add(sum(assignments[(n_idx, r_idx)] for n_idx in range(len(needs)) if (n_idx, r_idx) in assignments) <= 1)
+    
+    # Pre-parse and validate
+    valid_needs = []
+    for n in needs:
+        try: amount = int(n.get("amount") or 1)
+        except: amount = 1
+        valid_needs.append({"id": n.get("id"), "category": n.get("category"), "urgency": n.get("urgency", 1), "amount": amount})
         
-    # A need can be served by multiple resources if amount > capacity, 
-    # but for simplicity, limit to max 1 resource per need for this iteration.
-    for n_idx, need in enumerate(needs):
-        model.Add(sum(assignments[(n_idx, r_idx)] for r_idx in range(len(resources)) if (n_idx, r_idx) in assignments) <= 1)
+    valid_resources = []
+    for r in resources:
+        caps = r.get("capabilities")
+        if not isinstance(caps, dict):
+            caps = {}
+        valid_resources.append({"id": r.get("id"), "caps": caps, "version": r.get("version", 1)})
+        
+    for n_idx, need in enumerate(valid_needs):
+        category = need["category"]
+        for r_idx, resource in enumerate(valid_resources):
+            capacity = resource["caps"].get(category, 0)
+            try: capacity = int(capacity)
+            except: capacity = 0
+            if capacity <= 0:
+                continue
+                
+            assignments[(n_idx, r_idx)] = model.NewIntVar(0, capacity, f"assign_n{n_idx}_r{r_idx}")
 
-    # 3. Objective Function
-    # Maximize the value of served needs, weighted by urgency.
-    # High urgency gets a higher weight.
-    objective_terms = []
-    for n_idx, need in enumerate(needs):
-        urgency = need.get("urgency", 1)
-        # In a real model, we'd multiply by capacity satisfied. 
-        # Here we just weight the boolean assignment by urgency.
-        for r_idx, resource in enumerate(resources):
-            if (n_idx, r_idx) in assignments: objective_terms.append(urgency * 10 * assignments[(n_idx, r_idx)])
+    # A resource can only be assigned up to its capability in that category
+    # If a resource can be used for multiple categories, we limit the sum across all categories to the max capacity it has
+    for r_idx, resource in enumerate(valid_resources):
+        r_vars = [assignments[(n, r_idx)] for n in range(len(valid_needs)) if (n, r_idx) in assignments]
+        if r_vars:
+            max_cap = max([int(v) for v in resource["caps"].values() if str(v).isdigit()] + [0])
+            model.Add(sum(r_vars) <= max_cap)
             
+    # A need can be served up to its requested amount
+    for n_idx, need in enumerate(valid_needs):
+        n_vars = [assignments[(n_idx, r)] for r in range(len(valid_resources)) if (n_idx, r) in assignments]
+        if n_vars:
+            model.Add(sum(n_vars) <= need["amount"])
+
+    # Objective: maximize urgency * amount_assigned
+    objective_terms = []
+    for n_idx, need in enumerate(valid_needs):
+        urgency = int(need["urgency"])
+        for r_idx in range(len(valid_resources)):
+            if (n_idx, r_idx) in assignments:
+                objective_terms.append(urgency * assignments[(n_idx, r_idx)])
+                
     model.Maximize(sum(objective_terms))
 
-    # 4. Solve
     solver = cp_model.CpSolver()
-    # TRD requires 5 second limit
     solver.parameters.max_time_in_seconds = 5.0
     status = solver.Solve(model)
 
-    # 5. Extract Results
     result = {
         "status": solver.StatusName(status),
         "assignments": []
     }
     
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-        for n_idx, need in enumerate(needs):
-            for r_idx, resource in enumerate(resources):
-                if (n_idx, r_idx) in assignments and solver.Value(assignments[(n_idx, r_idx)]):
-                    result["assignments"].append({
-                        "need_id": need.get("id", n_idx),
-                        "resource_id": resource.get("id", r_idx)
-                    })
-                    
+        for n_idx, need in enumerate(valid_needs):
+            for r_idx, resource in enumerate(valid_resources):
+                if (n_idx, r_idx) in assignments:
+                    val = solver.Value(assignments[(n_idx, r_idx)])
+                    if val > 0:
+                        result["assignments"].append({
+                            "need_id": need["id"],
+                            "resource_id": resource["id"],
+                            "amount_assigned": val,
+                            "resource_version": resource["version"]
+                        })
+                        
     return result
+

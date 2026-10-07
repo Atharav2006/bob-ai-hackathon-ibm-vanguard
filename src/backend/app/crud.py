@@ -6,11 +6,14 @@ import uuid
 
 from . import models, schemas
 
-def create_plan(db: Session, snapshot_id: str, policy_version: str) -> models.Plan:
+def create_plan(db: Session, incident_id: uuid.UUID, snapshot_id: str, policy_version: str, incident_revision: int) -> models.Plan:
     plan = models.Plan(
+        incident_id=incident_id,
         snapshot_id=snapshot_id,
         status="candidate",
-        policy_version=policy_version
+        policy_version=policy_version,
+        incident_revision=incident_revision,
+        version=1
     )
     db.add(plan)
     db.commit()
@@ -24,6 +27,7 @@ def add_assignments_to_plan(db: Session, plan_id: uuid.UUID, assignments_data: L
             plan_id=plan_id,
             need_id=data["need_id"],
             resource_id=data["resource_id"],
+            resource_version=data.get("resource_version", 1),
             status="proposed"
         )
         db.add(assignment)
@@ -43,13 +47,11 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: 
 
     # Idempotency check: check records
     if idempotency_key:
-        # Lock the idempotency record or just check
         existing_record = db.query(models.IdempotencyRecord).filter_by(key=idempotency_key).first()
         if existing_record:
-            if existing_record.payload_hash != payload_hash:
-                raise HTTPException(status_code=409, detail="Idempotency key reused with different payload")
-            # If the response is already saved, we can return the plan
-            return plan
+            if existing_record.payload_hash != payload_hash or existing_record.target_id != str(plan_id) or existing_record.operation != "APPROVE_PLAN":
+                raise HTTPException(status_code=409, detail="Idempotency key reused with different payload or target")
+            return existing_record.response
     
     if expected_version is not None and plan.version != expected_version:
         raise HTTPException(status_code=409, detail=f"Plan version mismatch (Expected {expected_version}, got {plan.version})")
@@ -75,11 +77,20 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: 
     if len(locked_resources) != len(resource_ids_sorted):
         raise HTTPException(status_code=400, detail="Some resources are missing or invalid.")
 
+    # 3a. Check resource versions for freshness
+    locked_resources_dict = {r.id: r for r in locked_resources}
+    for assignment in assignments:
+        locked_resource = locked_resources_dict.get(assignment.resource_id)
+        if locked_resource and assignment.resource_version != locked_resource.version:
+            raise HTTPException(status_code=409, detail=f"Resource {assignment.resource_id} version changed (Expected {assignment.resource_version}, got {locked_resource.version})")
+
     # 3b. Lock Incident to ensure freshness
     if locked_resources:
         incident_id = locked_resources[0].incident_id
         locked_incident = db.query(models.Incident).filter_by(id=incident_id).with_for_update().first()
         if locked_incident:
+            if plan.incident_revision != locked_incident.revision:
+                raise HTTPException(status_code=409, detail=f"Incident revision changed (Expected {plan.incident_revision}, got {locked_incident.revision})")
             locked_incident.revision += 1
 
     # 4. Recheck for overlapping commitments
@@ -101,6 +112,7 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: 
     # 5. Commit the approval
     try:
         plan.status = "approved"
+        plan.version += 1
         
         for assignment in assignments:
             assignment.status = "assigned"
@@ -121,10 +133,16 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: 
         
         # 7. Idempotency Record
         if idempotency_key:
+            # Need to serialize the plan fully as response. We can convert to dict.
+            # Using schemas.Plan.from_orm to dump to dict
+            plan_response = schemas.Plan.from_orm(plan).model_dump(mode='json')
             record = models.IdempotencyRecord(
                 key=idempotency_key,
+                operation="APPROVE_PLAN",
+                target_id=str(plan.id),
                 payload_hash=payload_hash,
-                response={"plan_id": str(plan.id), "status": "approved"}
+                response=plan_response,
+                status_code=200
             )
             db.add(record)
             
@@ -137,9 +155,9 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: 
         # This occurs if two simultaneous transactions try to insert the same idempotency key
         existing_record = db.query(models.IdempotencyRecord).filter_by(key=idempotency_key).first()
         if existing_record:
-            if existing_record.payload_hash != payload_hash:
-                raise HTTPException(status_code=409, detail="Idempotency key reused with different payload")
-            return plan
+            if existing_record.payload_hash != payload_hash or existing_record.target_id != str(plan_id) or existing_record.operation != "APPROVE_PLAN":
+                raise HTTPException(status_code=409, detail="Idempotency key reused with different payload or target")
+            return existing_record.response
         raise HTTPException(status_code=500, detail="Transaction failed during approval commit.")
     except Exception as e:
         db.rollback()

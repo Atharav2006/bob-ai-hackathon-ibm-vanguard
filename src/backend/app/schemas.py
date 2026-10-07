@@ -79,7 +79,14 @@ class Plan(PlanBase):
         from_attributes = True
 
 class PlanApprovalRequest(BaseModel):
-    actor: str
     expected_version: Optional[int] = None
     idempotency_key: Optional[str] = None
+
+
+class ReportReviewRequest(BaseModel):
+    action: str # "approve" or "reject"
+    need_category: Optional[str] = None
+    need_amount: Optional[int] = None
+    need_urgency: Optional[int] = None
+    zone_id: Optional[uuid.UUID] = None
 

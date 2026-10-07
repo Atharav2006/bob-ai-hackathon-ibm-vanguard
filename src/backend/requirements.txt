@@ -9,3 +9,7 @@ geoalchemy2==0.14.2
 ortools==9.8.3296
 networkx==3.2.1
 ibm-watson-machine-learning==1.0.370
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2

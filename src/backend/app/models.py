@@ -68,8 +68,11 @@ class Zone(Base):
 class IdempotencyRecord(Base):
     __tablename__ = "idempotency_records"
     key = Column(String, primary_key=True)
+    operation = Column(String, nullable=False)
+    target_id = Column(String, nullable=False)
     payload_hash = Column(String, nullable=False)
     response = Column(JSON, nullable=False)
+    status_code = Column(Integer, nullable=False, default=200)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class Report(Base):
@@ -78,6 +81,7 @@ class Report(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     event_id = Column(String, nullable=True) # Used for deduplication
     external_id = Column(String, unique=True, nullable=True) # E.g. Twilio MessageSid
+    incident_id = Column(UUID(as_uuid=True), ForeignKey("incidents.id"), nullable=True)
     source = Column(String, nullable=False)
     observed_at = Column(DateTime, nullable=False)
     received_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -121,10 +125,12 @@ class Plan(Base):
     __tablename__ = "plans"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id = Column(UUID(as_uuid=True), ForeignKey("incidents.id"), nullable=False)
     snapshot_id = Column(String, nullable=False)
     status = Column(String, default="candidate") # candidate, approved, rejected, stale
     solver_status = Column(String, nullable=True) # OPTIMAL, FEASIBLE, etc.
     policy_version = Column(String, nullable=False)
+    incident_revision = Column(Integer, nullable=False, default=1)
     version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -137,6 +143,7 @@ class Assignment(Base):
     plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id"), nullable=False)
     need_id = Column(UUID(as_uuid=True), ForeignKey("needs.id"), nullable=False)
     resource_id = Column(UUID(as_uuid=True), ForeignKey("resources.id"), nullable=False)
+    resource_version = Column(Integer, nullable=False, default=1)
     status = Column(String, default="proposed") # proposed, assigned, acknowledged, en_route, on_site, completed
     version = Column(Integer, default=1)
 

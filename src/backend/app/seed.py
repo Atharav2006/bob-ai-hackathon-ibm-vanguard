@@ -8,6 +8,13 @@ def seed_database(db: Session):
 
     print("Seeding database with initial Disaster Zones and Resources...")
     
+    # Create default admin user
+    from .auth import get_password_hash
+    if not db.query(models.User).filter_by(username="admin").first():
+        admin_user = models.User(username="admin", hashed_password=get_password_hash("password"), role=models.UserRole.ADMIN)
+        db.add(admin_user)
+        db.commit()
+
     # Create an Incident first
     incident = models.Incident(name="Hurricane Bob 2026", mode="simulation")
     db.add(incident)

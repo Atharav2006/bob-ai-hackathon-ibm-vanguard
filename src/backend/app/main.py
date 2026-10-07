@@ -4,8 +4,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .api.routes import router
 
-# Create DB tables
-Base.metadata.create_all(bind=engine)
+# Run Alembic migrations on startup
+import os
+from alembic.config import Config
+from alembic import command
+alembic_cfg = Config("alembic.ini")
+# Ensure the path is correct if running from different directory
+if not os.path.exists("alembic.ini"):
+    alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
+try:
+    command.upgrade(alembic_cfg, "head")
+except Exception as e:
+    print(f"Migration failed or skipped: {e}")
+    # Fallback for dev environments without alembic setup
+    Base.metadata.create_all(bind=engine)
 
 from contextlib import asynccontextmanager
 from .seed import seed_database
@@ -37,6 +49,9 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api")
+
+from .auth_routes import add_auth_routes
+add_auth_routes(app)
 
 @app.get("/api/health")
 def health_check():
