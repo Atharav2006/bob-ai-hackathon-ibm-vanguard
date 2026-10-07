@@ -157,5 +157,11 @@ def downgrade() -> None:
     op.drop_table('users')
     op.drop_table('incidents')
     op.drop_table('idempotency_records')
+    op.drop_table('idempotency_records')
     op.drop_table('audit_logs')
+    
+    # Drop ENUM types that Postgres retains
+    op.execute("DROP TYPE IF EXISTS incidentmode CASCADE")
+    op.execute("DROP TYPE IF EXISTS userrole CASCADE")
+    op.execute("DROP TYPE IF EXISTS needcategory CASCADE")
     # ### end Alembic commands ###
