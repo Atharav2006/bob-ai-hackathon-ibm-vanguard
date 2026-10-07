@@ -157,7 +157,6 @@ def downgrade() -> None:
     op.drop_table('users')
     op.drop_table('incidents')
     op.drop_table('idempotency_records')
-    op.drop_table('idempotency_records')
     op.drop_table('audit_logs')
     
     # Drop ENUM types that Postgres retains
