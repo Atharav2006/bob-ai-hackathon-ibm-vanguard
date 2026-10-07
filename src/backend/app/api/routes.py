@@ -81,7 +81,7 @@ def generate_plan(snapshot_id: str, policy_version: str = "v1.0", db: Session = 
     """
     # 1. Fetch needs and resources from DB
     needs = db.query(models.Need).all()
-    resources = db.query(models.Resource).all()
+    resources = db.query(models.Resource).filter(models.Resource.status == "available").all()
     
     needs_data = [{"id": str(n.id), "urgency": n.urgency, "category": n.category} for n in needs]
     resources_data = [{"id": str(r.id), "capabilities": r.capabilities} for r in resources]
@@ -109,12 +109,14 @@ def approve_plan(plan_id: uuid.UUID, approval: schemas.PlanApprovalRequest, db: 
     """
     Executes an atomic approval, locking resources to prevent double-booking.
     """
+    payload_hash = __import__("hashlib").sha256(approval.model_dump_json().encode("utf-8")).hexdigest()
     return crud.approve_plan(
         db, 
         plan_id=plan_id, 
         actor=approval.actor,
         expected_version=approval.expected_version,
-        idempotency_key=approval.idempotency_key
+        idempotency_key=approval.idempotency_key,
+        payload_hash=payload_hash
     )
 
 import json
@@ -189,22 +191,37 @@ async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), Messa
         observed_at=datetime.utcnow()
     )
     db.add(db_report)
-    db.commit()
-    db.refresh(db_report)
+    from sqlalchemy.exc import IntegrityError
+    try:
+        db.commit()
+        db.refresh(db_report)
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(models.Report).filter(models.Report.external_id == MessageSid).first()
+        return {"message": "Duplicate SMS ignored (IntegrityError)", "report_id": existing.id}
     
     # 3. Create or update an Operational Need based on the report
     if extracted_data and "category" in extracted_data:
-        # For simplicity, assign to the first zone if location matching isn't implemented
-        zone = db.query(models.Zone).first()
-        if zone:
-            new_need = models.Need(
-                zone_id=zone.id,
-                category=extracted_data.get("category", "rescue"),
-                amount=extracted_data.get("amount", 1),
-                unit=extracted_data.get("unit", "unknown"),
-                urgency=extracted_data.get("urgency", 3)
-            )
-            db.add(new_need)
+        amount = extracted_data.get("amount")
+        needs_review = False
+        if amount is None or extracted_data.get("category") not in ["rescue", "medical", "supply"]:
+            needs_review = True
+            
+        if not needs_review:
+            zone = db.query(models.Zone).first()
+            if zone:
+                new_need = models.Need(
+                    zone_id=zone.id,
+                    category=extracted_data.get("category", "rescue"),
+                    amount=amount,
+                    unit=extracted_data.get("unit", "unknown"),
+                    urgency=extracted_data.get("urgency", 3)
+                )
+                db.add(new_need)
+                db_report.status = "verified"
+                db.commit()
+        else:
+            db_report.status = "needs_review"
             db.commit()
     
     # 4. Broadcast to all connected React Dashboards

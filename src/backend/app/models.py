@@ -65,6 +65,13 @@ class Zone(Base):
     incident = relationship("Incident", back_populates="zones")
     needs = relationship("Need", back_populates="zone")
 
+class IdempotencyRecord(Base):
+    __tablename__ = "idempotency_records"
+    key = Column(String, primary_key=True)
+    payload_hash = Column(String, nullable=False)
+    response = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 class Report(Base):
     __tablename__ = "reports"
     

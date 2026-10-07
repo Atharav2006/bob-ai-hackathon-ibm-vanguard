@@ -31,23 +31,25 @@ def add_assignments_to_plan(db: Session, plan_id: uuid.UUID, assignments_data: L
     db.commit()
     return assignments
 
-def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: int = None, idempotency_key: str = None):
+def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: int = None, idempotency_key: str = None, payload_hash: str = None):
     """
     Executes the atomic approval transaction with explicit row locks.
     Prevents double-booking of resources.
     """
-    # Idempotency check: check audit logs for this exact action
-    if idempotency_key:
-        existing_audit = db.query(models.AuditLog).filter_by(operation_id=idempotency_key).first()
-        if existing_audit:
-            # Already processed, just return the plan
-            plan = db.query(models.Plan).filter(models.Plan.id == plan_id).first()
-            return plan
-
     # 1. Fetch the plan
     plan = db.query(models.Plan).filter(models.Plan.id == plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+
+    # Idempotency check: check records
+    if idempotency_key:
+        # Lock the idempotency record or just check
+        existing_record = db.query(models.IdempotencyRecord).filter_by(key=idempotency_key).first()
+        if existing_record:
+            if existing_record.payload_hash != payload_hash:
+                raise HTTPException(status_code=409, detail="Idempotency key reused with different payload")
+            # If the response is already saved, we can return the plan
+            return plan
     
     if expected_version is not None and plan.version != expected_version:
         raise HTTPException(status_code=409, detail=f"Plan version mismatch (Expected {expected_version}, got {plan.version})")
@@ -73,9 +75,16 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: 
     if len(locked_resources) != len(resource_ids_sorted):
         raise HTTPException(status_code=400, detail="Some resources are missing or invalid.")
 
+    # 3b. Lock Incident to ensure freshness
+    if locked_resources:
+        incident_id = locked_resources[0].incident_id
+        locked_incident = db.query(models.Incident).filter_by(id=incident_id).with_for_update().first()
+        if locked_incident:
+            locked_incident.revision += 1
+
     # 4. Recheck for overlapping commitments
     # Find any active assignments (assigned, acknowledged, en_route, on_site) for these resources
-    active_statuses = ["assigned", "acknowledged", "en_route", "on_site"]
+    active_statuses = ["assigned", "acknowledged", "en_route", "on_site", "committed"]
     conflicts = db.query(models.Assignment).filter(
         models.Assignment.resource_id.in_(resource_ids_sorted),
         models.Assignment.status.in_(active_statuses)
@@ -98,6 +107,8 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: 
 
         for resource in locked_resources:
             resource.status = "committed"
+            resource.version += 1 # Update resource version for freshness guarantee
+
 
         # 6. Audit Trail
         audit = models.AuditLog(
@@ -108,10 +119,28 @@ def approve_plan(db: Session, plan_id: uuid.UUID, actor: str, expected_version: 
         )
         db.add(audit)
         
+        # 7. Idempotency Record
+        if idempotency_key:
+            record = models.IdempotencyRecord(
+                key=idempotency_key,
+                payload_hash=payload_hash,
+                response={"plan_id": str(plan.id), "status": "approved"}
+            )
+            db.add(record)
+            
         db.commit()
         db.refresh(plan)
         return plan
 
+    except IntegrityError as e:
+        db.rollback()
+        # This occurs if two simultaneous transactions try to insert the same idempotency key
+        existing_record = db.query(models.IdempotencyRecord).filter_by(key=idempotency_key).first()
+        if existing_record:
+            if existing_record.payload_hash != payload_hash:
+                raise HTTPException(status_code=409, detail="Idempotency key reused with different payload")
+            return plan
+        raise HTTPException(status_code=500, detail="Transaction failed during approval commit.")
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Transaction failed during approval commit.")
