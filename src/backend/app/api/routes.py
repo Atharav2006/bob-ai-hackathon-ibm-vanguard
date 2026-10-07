@@ -259,9 +259,6 @@ async def twilio_sms_webhook(From: str = Form(...), Body: str = Form(...), Messa
     # No automatic Need creation. Let human planners review it in the UI.
     db_report.status = "pending"
     db.commit()
-        else:
-            db_report.status = "needs_review"
-            db.commit()
     
     # 4. Broadcast to connected React Dashboards for the first operational incident
     incident = db.query(models.Incident).filter_by(mode="OPERATIONAL").first()
