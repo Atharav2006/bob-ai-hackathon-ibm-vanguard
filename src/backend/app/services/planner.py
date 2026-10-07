@@ -31,6 +31,8 @@ def generate_optimized_plan(needs: List[Dict], resources: List[Dict]):
         # Lowercase all capability keys and parse integers
         parsed_caps = {}
         for k, v in caps.items():
+            if v is None:
+                continue
             val = float(v)
             if not val.is_integer():
                 raise ValueError("Fractional capacities are not supported. Provide integer capabilities.")
