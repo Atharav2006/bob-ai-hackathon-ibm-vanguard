@@ -1,4 +1,4 @@
-﻿import os
+import os
 import asyncio
 import threading
 import uuid
@@ -38,6 +38,16 @@ def db_session(setup_db):
         db.close()
 
 client = TestClient(app)
+
+def create_dummy_need_and_resource(db_session, inc):
+    zone = models.Zone(incident_id=inc.id, name="Test Zone")
+    db_session.add(zone)
+    db_session.commit()
+    need = models.Need(zone_id=zone.id, category="medical", amount=5.0, unit="units", urgency=3)
+    res = models.Resource(incident_id=inc.id, name="Test Res", mode="simulation", capabilities={"medical": 10}, version=1)
+    db_session.add_all([need, res])
+    db_session.commit()
+    return need, res
 
 def get_auth_headers(db_session, role="admin"):
     from app.auth import create_access_token
@@ -118,12 +128,13 @@ def test_concurrency_same_plan_same_key(db_session):
     headers = get_auth_headers(db_session)
     inc_id = headers["X-Incident-ID"]
     
-    res = models.Resource(incident_id=uuid.UUID(inc_id), name="Res", mode="road", status="available", version=1)
-    plan = models.Plan(incident_id=uuid.UUID(inc_id), snapshot_id="snap_A", policy_version="v1", incident_revision=1, status="candidate", version=1)
-    db_session.add_all([res, plan])
+    inc = db_session.query(models.Incident).get(uuid.UUID(inc_id))
+    need, res = create_dummy_need_and_resource(db_session, inc)
+    plan = models.Plan(incident_id=inc.id, snapshot_id="snap_A", policy_version="v1", incident_revision=1, status="candidate", version=1)
+    db_session.add(plan)
     db_session.commit()
     
-    assign = models.Assignment(plan_id=plan.id, need_id=uuid.uuid4(), resource_id=res.id, amount_assigned=1, resource_version=1, status="candidate")
+    assign = models.Assignment(plan_id=plan.id, need_id=need.id, resource_id=res.id, amount_assigned=1, resource_version=1, status="candidate")
     db_session.add(assign)
     db_session.commit()
     
@@ -159,21 +170,19 @@ def test_concurrency_same_plan_same_key(db_session):
 def test_concurrency_competing_plans(db_session):
     headers = get_auth_headers(db_session)
     inc_id = headers["X-Incident-ID"]
-    inc = db_session.query(models.Incident).get(inc_id)
+    inc = db_session.query(models.Incident).get(uuid.UUID(inc_id))
     inc.revision = 5
     db_session.commit()
     
-    res = models.Resource(incident_id=uuid.UUID(inc_id), name="Res", mode="road", status="available", version=1)
-    db_session.add(res)
-    db_session.commit()
+    need, res = create_dummy_need_and_resource(db_session, inc)
     
     plan1 = models.Plan(incident_id=uuid.UUID(inc_id), snapshot_id="snap_B1", policy_version="v1", incident_revision=inc.revision, status="candidate", version=1)
     plan2 = models.Plan(incident_id=uuid.UUID(inc_id), snapshot_id="snap_B2", policy_version="v1", incident_revision=inc.revision, status="candidate", version=1)
     db_session.add_all([plan1, plan2])
     db_session.commit()
     
-    assign1 = models.Assignment(plan_id=plan1.id, need_id=uuid.uuid4(), resource_id=res.id, amount_assigned=1, resource_version=1, status="candidate")
-    assign2 = models.Assignment(plan_id=plan2.id, need_id=uuid.uuid4(), resource_id=res.id, amount_assigned=1, resource_version=1, status="candidate")
+    assign1 = models.Assignment(plan_id=plan1.id, need_id=need.id, resource_id=res.id, amount_assigned=1, resource_version=1, status="candidate")
+    assign2 = models.Assignment(plan_id=plan2.id, need_id=need.id, resource_id=res.id, amount_assigned=1, resource_version=1, status="candidate")
     db_session.add_all([assign1, assign2])
     db_session.commit()
     
@@ -197,11 +206,14 @@ def test_concurrency_same_key_different_payload(db_session):
     headers = get_auth_headers(db_session)
     inc_id = headers["X-Incident-ID"]
     
-    plan = models.Plan(incident_id=uuid.UUID(inc_id), snapshot_id="snap_C", policy_version="v1", incident_revision=1, status="candidate", version=1)
+    inc = db_session.query(models.Incident).get(uuid.UUID(inc_id))
+    need, res = create_dummy_need_and_resource(db_session, inc)
+    
+    plan = models.Plan(incident_id=inc.id, snapshot_id="snap_C", policy_version="v1", incident_revision=1, status="candidate", version=1)
     db_session.add(plan)
     db_session.commit()
     
-    assign = models.Assignment(plan_id=plan.id, need_id=uuid.uuid4(), resource_id=uuid.uuid4(), amount_assigned=1, resource_version=1, status="candidate")
+    assign = models.Assignment(plan_id=plan.id, need_id=need.id, resource_id=res.id, amount_assigned=1, resource_version=1, status="candidate")
     db_session.add(assign)
     db_session.commit()
     
