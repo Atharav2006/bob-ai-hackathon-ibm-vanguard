@@ -47,6 +47,7 @@ class ReportCreate(ReportBase):
 class Report(ReportBase):
     id: UUID
     received_at: datetime
+    status: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -6,6 +6,8 @@ const ReportForm: React.FC = () => {
   const [reportText, setReportText] = useState("");
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState<any[]>([]);
+  const [zones, setZones] = useState<any[]>([]);
+  const [selectedZones, setSelectedZones] = useState<Record<string, string>>({});
 
   const fetchReports = async () => {
     try {
@@ -16,20 +18,35 @@ const ReportForm: React.FC = () => {
         }
       });
       const data = await res.json();
+      if (!res.ok) { alert(data.detail || "Failed to fetch reports"); return; }
       setReports(data);
     } catch (e) {
       console.error(e);
     }
   };
 
+  const fetchZones = async () => {
+    try {
+      const res = await fetch("http://localhost:8001/api/map-data", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Incident-ID": incidentId
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.zones) setZones(data.zones);
+    } catch (e) {}
+  };
+
   useEffect(() => {
     fetchReports();
+    fetchZones();
   }, [incidentId, token]);
 
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await fetch("http://localhost:8001/api/reports/", {
+      const res = await fetch("http://localhost:8001/api/reports/", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -42,6 +59,8 @@ const ReportForm: React.FC = () => {
           raw_text: reportText
         })
       });
+      const data = await res.json();
+      if (!res.ok) { alert(data.detail || "Failed to submit"); return; }
       setReportText("");
       fetchReports();
     } catch (err) {
@@ -52,8 +71,16 @@ const ReportForm: React.FC = () => {
   };
 
   const handleReview = async (id: string, action: string, updates: any = {}) => {
+    if (action === "approve") {
+      if (!selectedZones[id]) {
+        alert("Please select a zone to approve this need.");
+        return;
+      }
+      updates.zone_id = selectedZones[id];
+    }
+    
     try {
-      await fetch(`http://localhost:8001/api/reports/${id}/review`, {
+      const res = await fetch(\http://localhost:8001/api/reports/\/review\, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -62,6 +89,8 @@ const ReportForm: React.FC = () => {
         },
         body: JSON.stringify({ action, ...updates })
       });
+      const data = await res.json();
+      if (!res.ok) { alert(data.detail || "Failed to review"); return; }
       fetchReports();
     } catch (err) {
       console.error(err);
@@ -92,6 +121,16 @@ const ReportForm: React.FC = () => {
             <pre style={{ fontSize: "0.8rem", background: "#eee", padding: "0.5rem" }}>
               {JSON.stringify(r.structured_data, null, 2)}
             </pre>
+            <div style={{ marginBottom: "1rem" }}>
+              <label><strong>Assign to Zone: </strong></label>
+              <select 
+                value={selectedZones[r.id] || ""} 
+                onChange={(e) => setSelectedZones({...selectedZones, [r.id]: e.target.value})}
+              >
+                <option value="">-- Select a Zone --</option>
+                {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+              </select>
+            </div>
             <div style={{ display: "flex", gap: "1rem" }}>
               <button onClick={() => handleReview(r.id, "approve", { 
                 need_category: r.structured_data?.category || "rescue",
@@ -107,7 +146,7 @@ const ReportForm: React.FC = () => {
       
       <div className="card" style={{ marginTop: "1rem" }}>
         <h3>Approved Reports</h3>
-        {reports.filter(r => r.status === "reviewed").map(r => (
+        {reports.filter(r => r.status === "verified").map(r => (
           <div key={r.id} style={{ borderBottom: "1px solid #eee", padding: "0.5rem 0" }}>
             <span style={{ color: "green" }}>✓ Approved:</span> {r.raw_text}
           </div>
@@ -118,4 +157,3 @@ const ReportForm: React.FC = () => {
 };
 
 export default ReportForm;
-

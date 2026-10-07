@@ -101,21 +101,21 @@ def read_incidents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db
 from ..services.watsonx import extract_needs_from_report
 
 @router.post("/reports/", response_model=schemas.Report)
-def create_report(report: schemas.ReportCreate, db: Session = Depends(get_db), current_user = Depends(auth.get_current_active_user)):
+def create_report(report: schemas.ReportCreate, db: Session = Depends(get_db), current_user = Depends(auth.get_current_active_user), current_incident: models.Incident = Depends(auth.get_current_incident)):
     # Trigger watsonx.ai extraction if raw_text is provided and structured_data is missing
     if report.raw_text and not report.structured_data:
         extracted = extract_needs_from_report(report.raw_text)
         if extracted:
             report.structured_data = extracted
 
-    db_report = models.Report(**report.model_dump())
+    db_report = models.Report(**report.model_dump(), incident_id=current_incident.id, status="needs_review")
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
     return db_report
 
 @router.get("/reports/", response_model=List[schemas.Report])
-def read_reports(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_reports(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_incident: models.Incident = Depends(auth.get_current_incident)):
     reports = db.query(models.Report).filter(models.Report.incident_id == current_incident.id).offset(skip).limit(limit).all()
     return reports
 
@@ -285,16 +285,23 @@ def review_report(report_id: uuid.UUID, review: schemas.ReportReviewRequest, db:
     if review.action == "reject":
         report.status = "rejected"
     elif review.action == "approve":
+        if not review.zone_id or not review.need_category:
+            raise HTTPException(status_code=400, detail="zone_id and need_category are required to approve a need.")
+        
+        # Verify zone exists
+        zone = db.query(models.Zone).filter(models.Zone.id == review.zone_id, models.Zone.incident_id == current_incident.id).first()
+        if not zone:
+            raise HTTPException(status_code=400, detail="Invalid zone_id for the current incident.")
+            
         report.status = "verified"
-        if review.zone_id and review.need_category:
-            new_need = models.Need(
-                zone_id=review.zone_id,
-                category=review.need_category,
-                amount=review.need_amount,
-                urgency=review.need_urgency or 3,
-                unit="unknown"
-            )
-            db.add(new_need)
+        new_need = models.Need(
+            zone_id=review.zone_id,
+            category=review.need_category,
+            amount=review.need_amount or 1,
+            urgency=review.need_urgency or 3,
+            unit="unknown"
+        )
+        db.add(new_need)
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
         

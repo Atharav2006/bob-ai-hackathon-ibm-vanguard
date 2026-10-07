@@ -1,42 +1,51 @@
 ﻿from ortools.sat.python import cp_model
 from typing import List, Dict
+import math
 
 def generate_optimized_plan(needs: List[Dict], resources: List[Dict]):
     model = cp_model.CpModel()
-    
     assignments = {}
     
-    # Pre-parse and validate
     valid_needs = []
     for n in needs:
-        try: amount = int(n.get("amount") or 1)
-        except: amount = 1
-        valid_needs.append({"id": n.get("id"), "category": n.get("category"), "urgency": n.get("urgency", 1), "amount": amount})
+        try:
+            val = float(n.get("amount") or 1)
+            amount = math.ceil(val)
+        except:
+            amount = 1
+        
+        if amount <= 0:
+            continue
+            
+        cat = str(n.get("category")).split('.')[-1].lower()
+        valid_needs.append({"id": n.get("id"), "category": cat, "urgency": n.get("urgency", 1), "amount": amount})
         
     valid_resources = []
     for r in resources:
         caps = r.get("capabilities")
         if not isinstance(caps, dict):
             caps = {}
-        valid_resources.append({"id": r.get("id"), "caps": caps, "version": r.get("version", 1)})
+        # Lowercase all capability keys and float-parse values
+        parsed_caps = {}
+        for k, v in caps.items():
+            try: parsed_caps[k.lower()] = math.ceil(float(v))
+            except: pass
+            
+        valid_resources.append({"id": r.get("id"), "caps": parsed_caps, "version": r.get("version", 1)})
         
     for n_idx, need in enumerate(valid_needs):
         category = need["category"]
         for r_idx, resource in enumerate(valid_resources):
             capacity = resource["caps"].get(category, 0)
-            try: capacity = int(capacity)
-            except: capacity = 0
             if capacity <= 0:
                 continue
-                
             assignments[(n_idx, r_idx)] = model.NewIntVar(0, capacity, f"assign_n{n_idx}_r{r_idx}")
 
     # A resource can only be assigned up to its capability in that category
-    # If a resource can be used for multiple categories, we limit the sum across all categories to the max capacity it has
     for r_idx, resource in enumerate(valid_resources):
         r_vars = [assignments[(n, r_idx)] for n in range(len(valid_needs)) if (n, r_idx) in assignments]
         if r_vars:
-            max_cap = max([int(v) for v in resource["caps"].values() if str(v).isdigit()] + [0])
+            max_cap = max(list(resource["caps"].values()) + [0])
             model.Add(sum(r_vars) <= max_cap)
             
     # A need can be served up to its requested amount
@@ -48,7 +57,10 @@ def generate_optimized_plan(needs: List[Dict], resources: List[Dict]):
     # Objective: maximize urgency * amount_assigned
     objective_terms = []
     for n_idx, need in enumerate(valid_needs):
-        urgency = int(need["urgency"])
+        try:
+            urgency = int(need["urgency"])
+        except:
+            urgency = 1
         for r_idx in range(len(valid_resources)):
             if (n_idx, r_idx) in assignments:
                 objective_terms.append(urgency * assignments[(n_idx, r_idx)])
@@ -71,11 +83,10 @@ def generate_optimized_plan(needs: List[Dict], resources: List[Dict]):
                     val = solver.Value(assignments[(n_idx, r_idx)])
                     if val > 0:
                         result["assignments"].append({
-                            "need_id": need["id"],
-                            "resource_id": resource["id"],
-                            "amount_assigned": val,
+                            "need_id": str(need["id"]),
+                            "resource_id": str(resource["id"]),
+                            "amount_assigned": int(val),
                             "resource_version": resource["version"]
                         })
                         
     return result
-
