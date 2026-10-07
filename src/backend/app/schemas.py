@@ -1,3 +1,4 @@
+import uuid
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 from datetime import datetime

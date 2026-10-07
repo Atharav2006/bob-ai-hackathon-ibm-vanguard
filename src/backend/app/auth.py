@@ -75,7 +75,7 @@ def require_role(allowed_roles: list):
         return current_user
     return role_checker
 
-﻿from fastapi import Header
+from fastapi import Header
 def get_current_incident(x_incident_id: str = Header(None), db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_active_user)):
     if not x_incident_id:
         raise HTTPException(status_code=400, detail="X-Incident-ID header missing")

@@ -1,8 +1,25 @@
-import uuid
+
+
+import os
 from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime, Enum, JSON
+from sqlalchemy.types import Uuid as UUID
+import uuid
+
+
+USE_SQLITE = "sqlite" in os.getenv("DATABASE_URL", "")
+if USE_SQLITE:
+    from sqlalchemy.types import TypeDecorator, String
+    class Geometry(TypeDecorator):
+        impl = String
+        def __init__(self, geometry_type="GEOMETRY", srid=-1, **kwargs):
+            super().__init__(**kwargs)
+else:
+    from geoalchemy2 import Geometry
+
+
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
-from geoalchemy2 import Geometry
+
+
 import datetime
 from .database import Base
 
